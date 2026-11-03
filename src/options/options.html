@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude Queue 設定</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1 data-i18n="optionsTitle"></h1>
+      <p class="muted" data-i18n="optionsIntro"></p>
+
+      <section class="card">
+        <h2 data-i18n="optSectionSend"></h2>
+        <label class="row">
+          <input type="checkbox" id="autoSend" />
+          <span>
+            <strong data-i18n="optAutoSend"></strong>
+            <span class="desc" data-i18n="optAutoSendDesc"></span>
+          </span>
+        </label>
+        <div class="danger-box" data-i18n="optAutoSendWarning"></div>
+
+        <label class="row">
+          <input type="checkbox" id="notifications" />
+          <span>
+            <strong data-i18n="optNotifications"></strong>
+            <span class="desc" data-i18n="optNotificationsDesc"></span>
+          </span>
+        </label>
+
+        <label class="row">
+          <span class="grow">
+            <strong data-i18n="optPollMinutes"></strong>
+            <span class="desc" data-i18n="optPollMinutesDesc"></span>
+          </span>
+          <input type="number" id="pollMinutes" min="1" max="30" step="1" />
+        </label>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="optSectionDebug"></h2>
+        <label class="row">
+          <input type="checkbox" id="debugLog" />
+          <span>
+            <strong data-i18n="optDebugLog"></strong>
+            <span class="desc" data-i18n="optDebugLogDesc"></span>
+          </span>
+        </label>
+
+        <label class="row">
+          <input type="checkbox" id="debugSimulate" />
+          <span class="grow">
+            <strong data-i18n="optSimulate"></strong>
+            <span class="desc" data-i18n="optSimulateDesc"></span>
+            <span class="desc" id="simulateStatus"></span>
+          </span>
+          <span class="inline">
+            <input type="number" id="debugSimulateMinutes" min="1" max="600" step="1" />
+            <span data-i18n="optMinutes"></span>
+          </span>
+        </label>
+
+        <div class="logs-head">
+          <strong data-i18n="optLogs"></strong>
+          <span class="muted small" id="logCount"></span>
+          <span class="spacer"></span>
+          <button id="refreshLogs" data-i18n="btnRefresh"></button>
+          <button id="copyLogs" data-i18n="btnCopyLogs"></button>
+          <button id="clearLogs" data-i18n="btnClearLogs"></button>
+        </div>
+        <textarea id="logs" readonly rows="12" spellcheck="false"></textarea>
+        <p class="muted small" data-i18n="optLogsPrivacy"></p>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="optSectionData"></h2>
+        <p class="muted" data-i18n="optClearAllDesc"></p>
+        <button id="clearAll" class="danger" data-i18n="btnClearAll"></button>
+      </section>
+
+      <p id="saved" class="saved" role="status" aria-live="polite"></p>
+    </main>
+
+    <script src="../shared/constants.js"></script>
+    <script src="../shared/i18n.js"></script>
+    <script src="../shared/settings.js"></script>
+    <script src="../shared/logger.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

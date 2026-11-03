@@ -1,0 +1,52 @@
+:root {
+  --bg: #faf9f5;
+  --card: #ffffff;
+  --text: #1f1e1d;
+  --muted: #6b6760;
+  --border: #e6dfd3;
+  --accent: #d97757;
+  --err: #c0392b;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1f1e1c; --card: #2b2a27; --text: #f1eee7; --muted: #b4afa6; --border: #45423c; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.55 system-ui, -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+}
+main { max-width: 720px; margin: 0 auto; padding: 28px 16px 60px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-top: 16px; }
+.row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; cursor: pointer; }
+.row + .row { border-top: 1px solid var(--border); }
+.row input[type="checkbox"] { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--accent); }
+.row .grow { flex: 1; }
+.desc { display: block; color: var(--muted); font-size: 12.5px; }
+.inline { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+input[type="number"] { width: 72px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; }
+.danger-box {
+  margin: 0 0 8px 26px; padding: 8px 10px; border-radius: 8px;
+  background: #fdecea; color: #8e1c14; border: 1px solid #f1a59f; font-size: 13px; font-weight: 600;
+}
+@media (prefers-color-scheme: dark) { .danger-box { background: #3d2322; color: #ffb4ab; border-color: #7a3631; } }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+button {
+  font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+}
+button:hover { border-color: var(--accent); }
+button.danger { color: var(--err); border-color: var(--err); }
+.logs-head { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.spacer { flex: 1; }
+textarea {
+  width: 100%; margin-top: 8px; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px;
+}
+.saved { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); margin: 0;
+  background: var(--text); color: var(--bg); padding: 6px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; }
+.saved.show { opacity: .92; }

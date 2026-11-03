@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "Claude Queue"
+  },
+  "extDescription": {
+    "message": "Saves messages you try to send when claude.ai usage is maxed out, and helps you send them after the limit resets."
+  }
+}

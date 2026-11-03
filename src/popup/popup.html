@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude Queue</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Claude Queue</h1>
+      <div class="head-actions">
+        <button id="refresh" class="icon" data-i18n-title="popupRefresh" aria-label="refresh">⟳</button>
+        <button id="openOptions" class="icon" data-i18n-title="popupOptions" aria-label="options">⚙</button>
+      </div>
+    </header>
+
+    <section class="card" id="usageCard">
+      <div class="meter" id="sessionMeter">
+        <div class="meter-head">
+          <span data-i18n="usageSession"></span>
+          <span class="pct">--</span>
+        </div>
+        <div class="bar"><div class="fill"></div></div>
+        <div class="reset"></div>
+      </div>
+      <div class="meter" id="weeklyMeter">
+        <div class="meter-head">
+          <span data-i18n="usageWeekly"></span>
+          <span class="pct">--</span>
+        </div>
+        <div class="bar"><div class="fill"></div></div>
+        <div class="reset"></div>
+      </div>
+      <div id="usageStatus" class="status-line"></div>
+      <div id="usageSource" class="muted small"></div>
+    </section>
+
+    <section>
+      <h2><span data-i18n="queueTitle"></span> <span id="queueCount" class="count"></span></h2>
+      <div id="autoSendWarning" class="warn-box small" hidden data-i18n="popupAutoSendOn"></div>
+      <ul id="queueList"></ul>
+      <p id="queueEmpty" class="muted empty" data-i18n="queueEmpty"></p>
+    </section>
+
+    <template id="itemTpl">
+      <li class="item">
+        <div class="item-head">
+          <span class="badge"></span>
+          <a class="conv" target="_blank" rel="noopener"></a>
+          <span class="time muted small"></span>
+        </div>
+        <div class="text"></div>
+        <textarea class="editor" rows="5" hidden></textarea>
+        <div class="meta small"></div>
+        <div class="error small" hidden></div>
+        <div class="actions">
+          <button class="btn-edit" data-i18n="btnEdit"></button>
+          <button class="btn-save primary" data-i18n="btnSave" hidden></button>
+          <button class="btn-cancel-edit" data-i18n="btnCancel" hidden></button>
+          <button class="btn-try" data-i18n="btnTryNow"></button>
+          <button class="btn-delete danger" data-i18n="btnDelete"></button>
+        </div>
+      </li>
+    </template>
+
+    <script src="../shared/constants.js"></script>
+    <script src="../shared/i18n.js"></script>
+    <script src="../shared/settings.js"></script>
+    <script src="../shared/logger.js"></script>
+    <script src="../shared/text.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

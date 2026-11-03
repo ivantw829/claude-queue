@@ -1,0 +1,371 @@
+{
+  "extName": {
+    "message": "Claude Queue"
+  },
+  "extDescription": {
+    "message": "claude.ai 用量達上限時保存你要送出的訊息，額度重置後協助你送出。"
+  },
+  "estimatedSuffix": {
+    "message": "（時間為估計）"
+  },
+  "countdownDone": {
+    "message": "已到時間"
+  },
+  "countdownDays": {
+    "message": "{days} 天 {rest}"
+  },
+  "toastQueued": {
+    "message": "用量已滿，訊息已排入佇列，預計 {time} 重置"
+  },
+  "toastHasAttachment": {
+    "message": "此訊息含附件，無法自動排隊（已照原本方式處理）"
+  },
+  "toastSaveFailed": {
+    "message": "訊息保存失敗，文字仍保留在輸入框，請勿關閉分頁"
+  },
+  "toastClearFailed": {
+    "message": "訊息已存入佇列，但無法清空輸入框，請手動清除"
+  },
+  "toastEditorChangedNotCleared": {
+    "message": "訊息已存入佇列；等待期間輸入框內容有變更，因此沒有清空"
+  },
+  "toastUsageRecovered": {
+    "message": "重新檢查後額度似乎已恢復，請再按一次送出"
+  },
+  "toastManualSendDetected": {
+    "message": "偵測到你已手動送出佇列中的相同內容，已從佇列移除"
+  },
+  "toastSelectorMissing": {
+    "message": "Claude Queue 找不到頁面元素「{name}」，claude.ai 介面可能已改版。請到設定頁開啟 debug log 並回報。"
+  },
+  "toastExtensionReloaded": {
+    "message": "Claude Queue 已更新或重新載入，請重新整理此頁面"
+  },
+  "toastRestoreError": {
+    "message": "還原訊息時發生錯誤，訊息仍保留在佇列"
+  },
+  "toastStillFull": {
+    "message": "用量仍未重置，預計 {time} 重置，訊息繼續保留在佇列"
+  },
+  "toastMarkedSent": {
+    "message": "已標記為已送出並從佇列移除"
+  },
+  "toastCopied": {
+    "message": "已複製"
+  },
+  "toastCopyFailed": {
+    "message": "複製失敗，請從 popup 開啟編輯手動複製"
+  },
+  "toastCancelled": {
+    "message": "已從佇列移除，文字保留在輸入框"
+  },
+  "toastKeptInQueue": {
+    "message": "訊息保留在佇列，可稍後從工具列圖示再試"
+  },
+  "toastAlreadyHandled": {
+    "message": "這則訊息已經被處理（送出或刪除）"
+  },
+  "toastClaimRejected": {
+    "message": "這則訊息正在其他分頁送出，或已送出，為避免重複已略過"
+  },
+  "toastEditorEmpty": {
+    "message": "輸入框是空的，未送出；訊息仍保留在佇列"
+  },
+  "toastSent": {
+    "message": "佇列訊息已送出"
+  },
+  "toastSentWeak": {
+    "message": "佇列訊息應已送出（無法確認訊息氣泡，介面可能已改版）"
+  },
+  "toastSendFailed": {
+    "message": "無法確認訊息已送出，已保留在佇列並標記為失敗，請檢查對話"
+  },
+  "toastWaitingForResponse": {
+    "message": "同一對話還有排隊的訊息，等目前回應完成後繼續"
+  },
+  "barRestored": {
+    "message": "已還原訊息，要送出嗎？"
+  },
+  "barAutoSendCountdown": {
+    "message": "已還原訊息，將於 {seconds} 秒後自動送出"
+  },
+  "barConversationMissing": {
+    "message": "原對話可能已不存在或網址已變更，要在目前這個對話送出嗎？"
+  },
+  "barDuplicate": {
+    "message": "對話中已有相同內容，可能已經送出過。"
+  },
+  "barEditorNotEmpty": {
+    "message": "輸入框已有其他內容，還原會覆蓋它。"
+  },
+  "barFillFailed": {
+    "message": "無法自動填入輸入框（介面可能已改版）。可複製文字後手動貼上，訊息仍保留在佇列。"
+  },
+  "btnSend": {
+    "message": "送出"
+  },
+  "btnSendNow": {
+    "message": "立即送出"
+  },
+  "btnCancel": {
+    "message": "取消"
+  },
+  "btnCancelAutoSend": {
+    "message": "取消自動送出"
+  },
+  "btnKeepInQueue": {
+    "message": "保留在佇列"
+  },
+  "btnSendHere": {
+    "message": "在此對話送出"
+  },
+  "btnMarkSent": {
+    "message": "標記為已送出"
+  },
+  "btnRestoreAnyway": {
+    "message": "仍要還原"
+  },
+  "btnOverwrite": {
+    "message": "覆蓋"
+  },
+  "btnCopyText": {
+    "message": "複製文字"
+  },
+  "btnClose": {
+    "message": "關閉"
+  },
+  "notifyReadyTitle": {
+    "message": "Claude 額度已重置"
+  },
+  "notifyReadyBody": {
+    "message": "佇列中有 {count} 則訊息可以送出，點此開啟原對話。"
+  },
+  "notifyReadyBodyUnverified": {
+    "message": "預計已重置（尚未開啟 claude.ai 確認），佇列中有 {count} 則訊息，點此開啟原對話。"
+  },
+  "notifyAutoSendBody": {
+    "message": "正在自動送出佇列中的 {count} 則訊息。"
+  },
+  "notifyCheckFailedTitle": {
+    "message": "Claude Queue：無法確認額度已重置"
+  },
+  "notifyCheckFailedBody": {
+    "message": "已重試 10 次仍顯示用量已滿。訊息仍保留在佇列，開啟 claude.ai 時會再自動檢查。"
+  },
+  "popupRefresh": {
+    "message": "重新查詢用量"
+  },
+  "popupOptions": {
+    "message": "設定"
+  },
+  "popupAutoSendOn": {
+    "message": "⚠ 已開啟「重置後自動送出」"
+  },
+  "popupSaveFailed": {
+    "message": "儲存失敗（訊息可能正在送出）"
+  },
+  "usageSession": {
+    "message": "Session（5 小時）"
+  },
+  "usageWeekly": {
+    "message": "每週"
+  },
+  "usageResetAt": {
+    "message": "{time} 重置 · 剩 {countdown}"
+  },
+  "usageFullUntil": {
+    "message": "用量已滿 · {time} 重置（剩 {countdown}）"
+  },
+  "usageAvailable": {
+    "message": "額度可用"
+  },
+  "usageUnknown": {
+    "message": "無法判斷用量狀態"
+  },
+  "usageUnknownOpenClaude": {
+    "message": "尚無用量資料，開啟 claude.ai 後會自動偵測"
+  },
+  "usageSourceLine": {
+    "message": "來源：{source} · {ago} 分鐘前更新"
+  },
+  "usageEndpointError": {
+    "message": "用量端點讀取失敗"
+  },
+  "usageNeedTab": {
+    "message": "需要開著 claude.ai 分頁才能查詢"
+  },
+  "sourceApi": {
+    "message": "用量端點"
+  },
+  "sourceApiDom": {
+    "message": "用量端點＋頁面提示"
+  },
+  "sourceDom": {
+    "message": "頁面提示文字（備援）"
+  },
+  "sourceSimulated": {
+    "message": "模擬（debug）"
+  },
+  "sourceNone": {
+    "message": "無"
+  },
+  "queueTitle": {
+    "message": "佇列"
+  },
+  "queueEmpty": {
+    "message": "目前沒有排隊的訊息"
+  },
+  "statusWaiting": {
+    "message": "等待重置"
+  },
+  "statusReady": {
+    "message": "可送出"
+  },
+  "statusFailed": {
+    "message": "失敗"
+  },
+  "statusSending": {
+    "message": "送出中"
+  },
+  "convNew": {
+    "message": "新對話"
+  },
+  "convProject": {
+    "message": "專案新對話"
+  },
+  "metaResetAt": {
+    "message": "預計 {time} 重置（剩 {countdown}）"
+  },
+  "metaReady": {
+    "message": "額度已重置，點「立即嘗試」或通知送出"
+  },
+  "metaReadyUnverified": {
+    "message": "預計已重置（尚未確認）"
+  },
+  "metaGaveUp": {
+    "message": "多次確認仍未重置"
+  },
+  "errTabClosed": {
+    "message": "送出過程中分頁被關閉，請確認對話中是否已送出"
+  },
+  "errInterrupted": {
+    "message": "送出過程中斷，請確認對話中是否已送出"
+  },
+  "errNotDetected": {
+    "message": "按下送出後沒有在對話中看到訊息"
+  },
+  "errSendButton": {
+    "message": "找不到可用的送出按鈕"
+  },
+  "errGeneric": {
+    "message": "錯誤：{code}"
+  },
+  "btnEdit": {
+    "message": "編輯"
+  },
+  "btnSave": {
+    "message": "儲存"
+  },
+  "btnTryNow": {
+    "message": "立即嘗試"
+  },
+  "btnDelete": {
+    "message": "刪除"
+  },
+  "btnDeleteConfirm": {
+    "message": "確定刪除？"
+  },
+  "btnRefresh": {
+    "message": "重新整理"
+  },
+  "optionsTitle": {
+    "message": "Claude Queue 設定"
+  },
+  "optionsIntro": {
+    "message": "所有資料只存在本機（chrome.storage.local），不會上傳到任何伺服器。"
+  },
+  "optSectionSend": {
+    "message": "送出"
+  },
+  "optAutoSend": {
+    "message": "重置後自動送出（不需確認）"
+  },
+  "optAutoSendDesc": {
+    "message": "額度重置後自動開啟原對話、填入文字並在 3 秒倒數後送出。"
+  },
+  "optAutoSendWarning": {
+    "message": "⚠ 警告：開啟後，排隊的訊息會在你不在電腦前時自動送出到 claude.ai，並可能自動開啟或切換分頁。若對話情境已改變，送出的內容可能不再合適。送出後無法撤回。預設關閉，建議只在你確定需要時開啟。"
+  },
+  "optAutoSendConfirm": {
+    "message": "確定要開啟「重置後自動送出」嗎？\n\n排隊的訊息會在額度重置後自動送出，不再詢問你。"
+  },
+  "optNotifications": {
+    "message": "桌面通知"
+  },
+  "optNotificationsDesc": {
+    "message": "額度重置時發出通知，點擊通知開啟原對話。關閉後只會在工具列圖示顯示數量。"
+  },
+  "optPollMinutes": {
+    "message": "用量輪詢頻率（分鐘）"
+  },
+  "optPollMinutesDesc": {
+    "message": "開著 claude.ai 分頁時多久查詢一次用量（1–30，預設 2）。多個分頁會共用結果。"
+  },
+  "optSectionDebug": {
+    "message": "除錯"
+  },
+  "optDebugLog": {
+    "message": "記錄 debug log"
+  },
+  "optDebugLogDesc": {
+    "message": "記錄偵測、排隊、送出等事件，方便回報問題。"
+  },
+  "optSimulate": {
+    "message": "模擬「用量已滿」"
+  },
+  "optSimulateDesc": {
+    "message": "不必真的用完額度即可測試：開啟後送出會被排隊，並在指定分鐘數後視為已重置。"
+  },
+  "optSimulateActive": {
+    "message": "模擬中：{time} 重置（剩 {countdown}）"
+  },
+  "optSimulateEnded": {
+    "message": "模擬的重置時間已到，目前視為額度可用；關閉再開啟可重新開始。"
+  },
+  "optMinutes": {
+    "message": "分鐘後重置"
+  },
+  "optLogs": {
+    "message": "Debug log"
+  },
+  "optLogCount": {
+    "message": "{count} 筆"
+  },
+  "optLogsPrivacy": {
+    "message": "log 只記錄事件、id、文字長度與狀態，不記錄訊息內容。"
+  },
+  "btnCopyLogs": {
+    "message": "複製 log"
+  },
+  "btnClearLogs": {
+    "message": "清除 log"
+  },
+  "optSectionData": {
+    "message": "資料"
+  },
+  "optClearAllDesc": {
+    "message": "刪除佇列中的所有訊息、用量快取、log 與設定，並取消所有排程。"
+  },
+  "btnClearAll": {
+    "message": "清除所有資料"
+  },
+  "optClearAllConfirm": {
+    "message": "確定要清除所有資料嗎？佇列中尚未送出的訊息會被永久刪除。"
+  },
+  "optCleared": {
+    "message": "已清除所有資料"
+  },
+  "optSaved": {
+    "message": "已儲存"
+  }
+}
