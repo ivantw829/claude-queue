@@ -18,6 +18,12 @@ const log = CQ.logger.createLogger('sw');
 const NOTIFY_READY = 'cq-ready';
 const NOTIFY_FAILED = 'cq-check-failed';
 const NOTIFY_AUTO_FAILED_PREFIX = 'cq-auto-failed:';
+const NOTIFY_KEEPALIVE_FAILED = 'cq-keepalive-failed';
+const NEW_CHAT_URL = 'https://claude.ai/new';
+// 自動重設連續失敗幾次後暫停（直到看到工作階段重新開始，或重新開啟設定）
+const KEEPALIVE_MAX_FAILS = 3;
+// 自動重設項目一直沒被分頁領取的時間上限（逾時就移除，下次再試）
+const KEEPALIVE_STALE_MS = 15 * 60 * 1000;
 const CLAUDE_MATCH = 'https://claude.ai/*';
 // 已交給某個分頁還原、但還沒取得 claim（例如倒數中）的項目，在這段時間內不會再被自動開啟
 const RESTORING_TTL_MS = 3 * 60 * 1000;
@@ -91,7 +97,8 @@ async function addSentId(id) {
 // ─────────────────────────── badge ───────────────────────────
 
 function updateBadge(queue) {
-  const active = queue.filter((i) => i.status !== STATUS.SENT);
+  // 自動重設的項目是內部工作，不算在徽章數字裡
+  const active = queue.filter((i) => i.status !== STATUS.SENT && !i.keepalive);
   const text = active.length ? String(active.length) : '';
   let color = '#d97757';
   if (active.some((i) => i.status === STATUS.FAILED)) color = '#c0392b';
@@ -260,7 +267,11 @@ async function notify(id, title, message) {
 chrome.notifications.onClicked.addListener(async (id) => {
   chrome.notifications.clear(id);
   if (id === NOTIFY_READY) await openNext('manual');
-  else if (id === NOTIFY_FAILED) await focusOrOpen('https://claude.ai/new');
+  else if (id === NOTIFY_FAILED) await focusOrOpen(NEW_CHAT_URL);
+  else if (id === NOTIFY_KEEPALIVE_FAILED) {
+    const st = await getKeepaliveState();
+    await focusOrOpen(st.conversationUrl || NEW_CHAT_URL);
+  }
   else if (id.startsWith(NOTIFY_AUTO_FAILED_PREFIX)) {
     const itemId = id.slice(NOTIFY_AUTO_FAILED_PREFIX.length);
     const it = (await getQueue()).find((i) => i.id === itemId);
@@ -312,6 +323,11 @@ async function giveUp(id, token, reason) {
     if (!it) return null;
     if (it.claim && token && it.claim.token !== token) return null;
     if (it.claim && !token && Date.now() - it.claim.at < TIMING.CLAIM_TTL_MS) return null;
+    if (it.keepalive) {
+      // 自動重設不留下失敗項目，直接移除
+      await saveQueue(q.filter((i) => i.id !== id));
+      return it;
+    }
     it.claim = null;
     it.restoring = null;
     it.status = STATUS.FAILED;
@@ -320,8 +336,9 @@ async function giveUp(id, token, reason) {
     return it;
   });
   if (!item) return { ok: false };
-  log.warn('auto send gave up', { id, reason });
-  await notifyAutoFailed(item, reason);
+  log.warn('auto send gave up', { id, reason, keepalive: !!item.keepalive });
+  if (item.keepalive) await keepaliveFailed(item, reason, { notify: true });
+  else await notifyAutoFailed(item, reason);
   return { ok: true };
 }
 
@@ -330,6 +347,207 @@ async function continueAuto() {
   const settings = await CQ.settings.load();
   if (!settings.autoSend) return;
   await openNext('auto');
+}
+
+// ─────────────────────────── 自動重設（keepalive） ───────────────────────────
+//
+// claude.ai 的 5 小時工作階段在送出第一則訊息時才開始倒數。工作階段結束後如果沒人送訊息，
+// 就會一直停在「歸零」。開啟「自動重設」後，工作階段一結束就送出一則短訊息（預設 Hello World!）
+// 到一個固定的專用對話，讓下一個工作階段馬上開始倒數。
+// 送出本身沿用佇列的自動送出流程（keepalive 項目），所以一樣有 claim、對話確認、用量再確認等保護。
+
+let kaChain = Promise.resolve();
+async function getKeepaliveState() {
+  return {
+    conversationUrl: null,
+    lastAttemptAt: 0,
+    lastSentAt: 0,
+    lastError: null,
+    failCount: 0,
+    ...((await getVal(K.KEEPALIVE, null)) || {})
+  };
+}
+function setKeepaliveState(patch) {
+  const p = kaChain.then(async () => {
+    const next = { ...(await getKeepaliveState()), ...patch };
+    await chrome.storage.local.set({ [K.KEEPALIVE]: next });
+    return next;
+  });
+  kaChain = p.catch(() => {});
+  return p;
+}
+
+/** 目前工作階段的結束時間；沒有進行中的工作階段時回傳 null */
+function sessionEndAt(snap, state, now = Date.now()) {
+  const r = snap && snap.session ? Number(snap.session.resetsAt) : 0;
+  if (r && r > now) return r;
+  // API 沒給結束時間（或還沒更新）但我們剛送過 → 以送出時間 + 5 小時估計，避免重複送出
+  const est = state.lastSentAt ? state.lastSentAt + TIMING.SESSION_LENGTH_MS : 0;
+  return est > now ? est : null;
+}
+
+/** 工作階段已歸零（沒有進行中的工作階段，而且沒有任何上限已滿） */
+function isSessionIdle(snap, state, now = Date.now()) {
+  if (!snap || !snap.session || snap.full !== false) return false;
+  return sessionEndAt(snap, state, now) == null;
+}
+
+async function scheduleKeepaliveAlarm(snap) {
+  const settings = await CQ.settings.load();
+  if (!settings.autoReset) {
+    await chrome.alarms.clear(ALARMS.KEEPALIVE);
+    return;
+  }
+  const state = await getKeepaliveState();
+  const now = Date.now();
+  let when = null;
+  const end = sessionEndAt(snap, state, now);
+  if (snap && snap.full === true && Number(snap.resetAt) > now) {
+    // 上限已滿（例如每週上限）→ 等它重置後再看
+    when = Math.max(end || 0, Number(snap.resetAt)) + TIMING.KEEPALIVE_BUFFER_MS;
+  } else if (end) {
+    when = end + TIMING.KEEPALIVE_BUFFER_MS;
+  } else if (state.failCount < KEEPALIVE_MAX_FAILS) {
+    // 已歸零但這次還不能送（冷卻中、佇列正在送…）→ 稍後再檢查
+    when = Math.max(state.lastAttemptAt + TIMING.KEEPALIVE_COOLDOWN_MS, now + 60 * 1000);
+  }
+  if (!when) {
+    await chrome.alarms.clear(ALARMS.KEEPALIVE);
+    return;
+  }
+  const existing = await chrome.alarms.get(ALARMS.KEEPALIVE);
+  if (!existing || Math.abs(existing.scheduledTime - when) > 1000) {
+    await chrome.alarms.create(ALARMS.KEEPALIVE, { when });
+    log.info('keepalive alarm scheduled', { when: new Date(when).toISOString() });
+  }
+}
+
+/**
+ * 符合條件就把自動重設訊息加進佇列並開啟專用對話。
+ * unverified：沒有用量快照可以確認（沒有開著的 claude.ai 分頁）→ 交給頁面確認
+ * force：略過冷卻（專用對話被刪除、改開新對話時）
+ */
+async function maybeTriggerKeepalive(snap, why, { unverified = false, force = false } = {}) {
+  const settings = await CQ.settings.load();
+  if (!settings.autoReset) return false;
+  const state = await getKeepaliveState();
+  const now = Date.now();
+  if (unverified ? sessionEndAt(null, state, now) : !isSessionIdle(snap, state, now)) return false;
+  if (state.failCount >= KEEPALIVE_MAX_FAILS) return false;
+  if (!force && now - state.lastAttemptAt < TIMING.KEEPALIVE_COOLDOWN_MS) return false;
+
+  const item = await locked(async () => {
+    const q = await getQueue();
+    if (q.some((i) => i.keepalive)) return null;
+    // 佇列的訊息正在送（或開著自動送出且有可送的訊息）→ 那則訊息本身就會開始新的工作階段
+    if (q.some((i) => i.claim || (i.restoring && now - i.restoring.at < RESTORING_TTL_MS))) return null;
+    if (settings.autoSend && q.some((i) => isAutoEligible(i, q, now))) return null;
+    const it = {
+      id: CQ.text.uuid(),
+      text: settings.autoResetText,
+      url: state.conversationUrl || NEW_CHAT_URL,
+      createdAt: now,
+      resetAt: now,
+      resetEstimated: false,
+      reasons: [],
+      keepalive: true,
+      draft: false,
+      newChatGroup: null,
+      status: STATUS.READY,
+      attempts: 0,
+      lastError: null,
+      claim: null
+    };
+    q.push(it);
+    await saveQueue(q);
+    return it;
+  });
+  if (!item) return false;
+  await setKeepaliveState({ lastAttemptAt: now });
+  log.info('keepalive triggered', { why, unverified, newChat: !state.conversationUrl });
+  await openItem(item, 'auto');
+  return true;
+}
+
+async function evaluateKeepalive(snap, why) {
+  const settings = await CQ.settings.load();
+  if (!settings.autoReset) return;
+  const now = Date.now();
+  // 看到工作階段正在進行（你自己用了 Claude）→ 清掉連續失敗次數，恢復自動重設
+  if (snap && snap.session && Number(snap.session.resetsAt) > now) {
+    const st = await getKeepaliveState();
+    if (st.failCount) await setKeepaliveState({ failCount: 0 });
+  }
+  await maybeTriggerKeepalive(snap, why);
+  await scheduleKeepaliveAlarm(snap);
+}
+
+async function handleKeepaliveAlarm() {
+  const settings = await CQ.settings.load();
+  if (!settings.autoReset) return;
+  // 分頁查詢用量時也會回報 USAGE_SNAPSHOT（同樣會評估）；重複觸發由「佇列中已有自動重設項目」擋下
+  const snap = await requestUsageFromTab();
+  log.info('keepalive alarm', { hasTab: !!snap });
+  if (snap) {
+    await evaluateKeepalive(snap, 'alarm');
+  } else {
+    // 沒有可以查詢的 claude.ai 分頁 → 直接開啟專用對話，頁面會再確認工作階段是否真的歸零
+    await maybeTriggerKeepalive(null, 'alarm-no-tab', { unverified: true });
+    await scheduleKeepaliveAlarm(await getVal(K.USAGE, null));
+  }
+}
+
+async function keepaliveSent() {
+  await setKeepaliveState({ lastSentAt: Date.now(), lastError: null, failCount: 0 });
+  log.info('keepalive sent');
+  await scheduleKeepaliveAlarm(await getVal(K.USAGE, null));
+}
+
+async function keepaliveFailed(item, reason, { notify: shouldNotify }) {
+  reason = String(reason || 'unknown');
+  if (reason === 'conversation-missing') {
+    // 專用對話不見了（被刪除）→ 忘記它，改開新對話再試一次
+    await setKeepaliveState({ conversationUrl: null, lastError: reason });
+    log.warn('keepalive conversation missing, retrying in a new chat');
+    if (!CQ.text.isNewChatUrl(item.url)) {
+      await maybeTriggerKeepalive(null, 'conversation-missing', { unverified: true, force: true });
+      return;
+    }
+  }
+  const st = await setKeepaliveState({
+    lastError: reason,
+    failCount: (await getKeepaliveState()).failCount + 1
+  });
+  log.warn('keepalive failed', { reason, failCount: st.failCount });
+  if (shouldNotify || st.failCount >= KEEPALIVE_MAX_FAILS) {
+    const key = FAIL_REASON_KEYS[reason] || 'reasonGeneric';
+    await notify(
+      NOTIFY_KEEPALIVE_FAILED,
+      t('notifyKeepaliveFailedTitle'),
+      t(st.failCount >= KEEPALIVE_MAX_FAILS ? 'notifyKeepalivePausedBody' : 'notifyKeepaliveFailedBody', {
+        reason: t(key)
+      })
+    );
+  }
+  await scheduleKeepaliveAlarm(await getVal(K.USAGE, null));
+}
+
+async function onKeepaliveToggled(enabled) {
+  if (!enabled) {
+    await chrome.alarms.clear(ALARMS.KEEPALIVE);
+    await locked(async () => {
+      const q = await getQueue();
+      const kept = q.filter((i) => !i.keepalive || i.claim);
+      if (kept.length !== q.length) await saveQueue(kept);
+    });
+    log.info('keepalive disabled');
+    return;
+  }
+  await setKeepaliveState({ failCount: 0, lastError: null });
+  log.info('keepalive enabled');
+  const snap = await requestUsageFromTab();
+  if (snap) await evaluateKeepalive(snap, 'enabled');
+  else await scheduleKeepaliveAlarm(await getVal(K.USAGE, null));
 }
 
 // ─────────────────────────── tabs ───────────────────────────
@@ -416,7 +634,9 @@ async function openNext(mode, itemId) {
   const candidates =
     mode === 'auto'
       ? queue.filter((i) => isAutoEligible(i, queue, now))
-      : queue.filter((i) => i.status === STATUS.READY && !i.claim && !i.draft && !i.awaitRebind);
+      : queue.filter(
+          (i) => i.status === STATUS.READY && !i.claim && !i.draft && !i.awaitRebind && !i.keepalive
+        );
   const item = itemId ? queue.find((i) => i.id === itemId) : candidates[0];
   if (!item) {
     log.info('openNext: no ready item', { mode });
@@ -430,8 +650,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     const pending = await getVal(K.PENDING_RESTORE, null);
     if (pending && pending.tabId === tabId) await chrome.storage.local.remove(K.PENDING_RESTORE);
     // 送出過程中分頁被關閉 → 無法確定是否已送出，標記失敗讓使用者確認（不自動重送，避免重複）
-    const q = await getQueue();
+    let q = await getQueue();
     let changed = false;
+    const droppedKeepalive = [];
     for (const it of q) {
       if (it.restoring && it.restoring.tabId === tabId) {
         it.restoring = null;
@@ -441,13 +662,18 @@ chrome.tabs.onRemoved.addListener((tabId) => {
         it.claim = null;
         it.status = STATUS.FAILED;
         it.lastError = 'tab-closed-during-send';
+        if (it.keepalive) droppedKeepalive.push(it);
         changed = true;
       }
     }
+    if (droppedKeepalive.length) q = q.filter((i) => !droppedKeepalive.includes(i));
     if (changed) {
       log.warn('tab closed during send', { tabId });
       await saveQueue(q);
     }
+    return droppedKeepalive;
+  }).then((dropped) => {
+    for (const it of dropped || []) keepaliveFailed(it, 'tab-closed-during-send', { notify: false });
   });
 });
 
@@ -459,6 +685,12 @@ async function reconcile() {
     const now = Date.now();
     let changed = false;
     for (const it of q) {
+      if (it.keepalive && !it.claim && now - it.createdAt > KEEPALIVE_STALE_MS) {
+        // 自動重設項目一直沒被分頁領取（例如分頁載入失敗）→ 移除，之後再試
+        it.status = STATUS.SENT; // 下面的過濾會移除
+        changed = true;
+        continue;
+      }
       if (it.claim && now - it.claim.at > TIMING.CLAIM_TTL_MS) {
         it.claim = null;
         it.status = STATUS.FAILED;
@@ -473,7 +705,8 @@ async function reconcile() {
         changed = true;
       }
     }
-    const kept = q.filter((i) => i.status !== STATUS.SENT);
+    // 自動重設項目送出中斷 → 直接移除（不留下失敗的內部訊息）
+    const kept = q.filter((i) => i.status !== STATUS.SENT && !(i.keepalive && i.status === STATUS.FAILED));
     if (kept.length !== q.length) changed = true;
     if (changed) await saveQueue(kept);
     else updateBadge(q);
@@ -484,6 +717,7 @@ async function reconcile() {
     }
   });
   await scheduleResetAlarm();
+  await scheduleKeepaliveAlarm(await getVal(K.USAGE, null));
 }
 
 chrome.runtime.onInstalled.addListener(() => reconcile());
@@ -491,7 +725,19 @@ chrome.runtime.onStartup.addListener(() => reconcile()); // 瀏覽器重啟後 a
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARMS.RESET_CHECK) {
     handleResetCheck().catch((e) => log.error('reset check failed', e));
+  } else if (alarm.name === ALARMS.KEEPALIVE) {
+    handleKeepaliveAlarm().catch((e) => log.error('keepalive alarm failed', e));
   }
+});
+
+// 設定頁開關「自動重設」
+chrome.storage.onChanged.addListener((changes, area) => {
+  const ch = area === 'local' && changes[K.SETTINGS];
+  if (!ch) return;
+  const before = !!(ch.oldValue && ch.oldValue.autoReset);
+  const after = !!(ch.newValue && ch.newValue.autoReset);
+  if (before === after) return;
+  onKeepaliveToggled(after).catch((e) => log.error('keepalive toggle failed', e));
 });
 
 // ─────────────────────────── 訊息處理 ───────────────────────────
@@ -613,8 +859,11 @@ const handlers = {
       }
       await addSentId(id);
       await saveQueue(q.filter((i) => i.id !== id)); // 送出成功才移除
-      log.info('marked sent', { id, confidence, edited: !!edited });
-      return { ok: true };
+      log.info('marked sent', { id, confidence, edited: !!edited, keepalive: !!(it && it.keepalive) });
+      return { ok: true, keepalive: !!(it && it.keepalive) };
+    }).then(async (res) => {
+      if (res && res.keepalive) await keepaliveSent();
+      return res;
     });
   },
 
@@ -637,6 +886,10 @@ const handlers = {
       const it = q.find((i) => i.id === id);
       if (!it) return { ok: false, error: 'not found' };
       if (it.claim && it.claim.token !== token) return { ok: false, error: 'token mismatch' };
+      if (it.keepalive) {
+        await saveQueue(q.filter((i) => i.id !== id));
+        return { ok: true, keepalive: it };
+      }
       it.claim = null;
       it.restoring = null;
       it.status = STATUS.FAILED;
@@ -644,6 +897,12 @@ const handlers = {
       await saveQueue(q);
       log.warn('marked failed', { id, error: it.lastError });
       return { ok: true };
+    }).then(async (res) => {
+      if (res && res.keepalive) {
+        await keepaliveFailed(res.keepalive, error || 'unknown', { notify: true });
+        return { ok: true };
+      }
+      return res;
     });
   },
 
@@ -653,6 +912,12 @@ const handlers = {
       const it = q.find((i) => i.id === id);
       if (!it) return { ok: false, error: 'not found' };
       if (it.claim && it.claim.token !== token) return { ok: false, error: 'claimed by another' };
+      if (it.keepalive && status === STATUS.WAITING) {
+        // 仍然已滿（例如每週上限）→ 不送，移除；等上限重置後由 alarm 再處理
+        await saveQueue(q.filter((i) => i.id !== id));
+        log.info('keepalive skipped: still full', { resetAt });
+        return { ok: true };
+      }
       it.claim = null;
       it.restoring = null;
       it.status = status === STATUS.WAITING ? STATUS.WAITING : STATUS.READY;
@@ -814,6 +1079,18 @@ const handlers = {
         .map((i) => i.id);
       if (ids.length) await markReady(ids, { unverified: false });
     }
+    if (['api', 'simulated'].includes(snapshot.source) || snapshot.full === true) {
+      await evaluateKeepalive(snapshot, 'snapshot');
+    }
+    return { ok: true };
+  },
+
+  /** 自動重設：第一次在新對話送出後，記下專用對話的網址 */
+  async [MSG.KEEPALIVE_BOUND]({ url }) {
+    const valid = typeof url === 'string' && /^https:\/\/claude\.ai\//.test(url) && !CQ.text.isNewChatUrl(url);
+    if (!valid) return { ok: false };
+    await setKeepaliveState({ conversationUrl: url });
+    log.info('keepalive conversation bound');
     return { ok: true };
   },
 

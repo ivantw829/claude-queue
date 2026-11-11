@@ -8,6 +8,7 @@
 
   CQ.i18n.applyI18n(document);
   document.title = t('optionsTitle');
+  $('version').textContent = 'v' + chrome.runtime.getManifest().version;
 
   let savedTimer = null;
   function flashSaved(msg = t('optSaved')) {

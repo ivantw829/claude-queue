@@ -418,5 +418,17 @@
   },
   "reasonNewChatUrl": {
     "message": "無法取得新對話的網址，為避免送到別的對話已停止"
+  },
+  "optSectionAbout": {
+    "message": "關於"
+  },
+  "optVersion": {
+    "message": "版本"
+  },
+  "optGithub": {
+    "message": "GitHub 專案"
+  },
+  "optDeveloper": {
+    "message": "開發者"
   }
 }
