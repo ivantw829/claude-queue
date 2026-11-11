@@ -367,5 +367,56 @@
   },
   "optSaved": {
     "message": "已儲存"
+  },
+  "toastDraftSaved": {
+    "message": "輸入框原有的草稿已存入佇列（標記為草稿，不會自動送出）"
+  },
+  "toastRetryReload": {
+    "message": "頁面狀態尚未更新，重新整理後再試一次"
+  },
+  "toastWrongConversation": {
+    "message": "目前不是原本的對話，改為開啟原對話再送出"
+  },
+  "toastAutoSendGaveUp": {
+    "message": "無法自動送出，訊息已保留在佇列並標記為失敗"
+  },
+  "notifyAutoFailedTitle": {
+    "message": "Claude Queue：自動送出未完成"
+  },
+  "notifyAutoFailedBody": {
+    "message": "有 1 則訊息無法自動送出（{reason}），仍保留在佇列。點此開啟原對話。"
+  },
+  "reasonConversationMissing": {
+    "message": "原對話已不存在"
+  },
+  "reasonSendButton": {
+    "message": "找不到可用的送出按鈕"
+  },
+  "reasonNotSent": {
+    "message": "按下送出後沒有反應"
+  },
+  "reasonUncertain": {
+    "message": "無法確認是否已送出，為避免重複不再自動重試"
+  },
+  "reasonFillFailed": {
+    "message": "無法填入輸入框"
+  },
+  "reasonEditor": {
+    "message": "找不到輸入框"
+  },
+  "reasonStaleLimit": {
+    "message": "頁面持續顯示用量上限"
+  },
+  "reasonGeneric": {
+    "message": "發生未預期的錯誤"
+  },
+  "popupDraftTag": {
+    "message": "草稿"
+  },
+  "reasonDuplicate": {
+    "message": "對話中已有相同內容，可能已經送出過"
+  },
+  "reasonNewChatUrl": {
+    "message": "無法取得新對話的網址，為避免送到別的對話已停止"
   }
 }

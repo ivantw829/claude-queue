@@ -72,6 +72,7 @@ ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: col
 .badge.ready { background: var(--ok); }
 .badge.failed { background: var(--err); }
 .badge.sending { background: var(--warn); }
+.badge.draft { background: var(--muted); }
 .text { margin: 6px 0 4px; white-space: pre-wrap; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .editor { width: 100%; margin: 6px 0 4px; font: inherit; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
 .meta { color: var(--muted); }

@@ -107,12 +107,14 @@
       if (location.href !== lastUrl) {
         lastUrl = location.href;
         log.debug('url changed');
+        CQ.interceptor.onNavigate();
+        CQ.restore.onNavigate(); // 還原中離開原對話 → 中止，不會送到別的對話
         CQ.restore.check();
       }
-    }, 1000);
+    }, 500);
 
-    // 等頁面渲染完成後再檢查是否有指定給此分頁的還原工作
-    setTimeout(() => CQ.restore.check(), 1500);
+    // 等頁面渲染完成後檢查是否有指定給此分頁的還原工作；頁面載入慢時多檢查幾次（領到就不會重複）
+    for (const delay of CQ.TIMING.RESTORE_CHECK_DELAYS_MS) setTimeout(() => CQ.restore.check(), delay);
 
     // 若設定變更（例如開啟模擬），立刻更新一次
     CQ.settings.onChange(() => CQ.usageState.refresh());
@@ -127,8 +129,9 @@
       return true;
     }
     if (msg.type === MSG.RESTORE_START) {
-      CQ.restore.run(msg.item, msg.mode);
-      sendResponse({ ok: true });
+      // 忙碌時回 ok:false，SW 會保留工作，這個分頁處理完目前這則後再來領取
+      const accepted = CQ.restore.start(msg.item, msg.mode, msg.attempt || {});
+      sendResponse({ ok: accepted, busy: !accepted });
       return false;
     }
     return false;

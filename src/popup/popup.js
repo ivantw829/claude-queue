@@ -80,6 +80,7 @@
 
   function badgeFor(item) {
     if (item.claim) return { cls: 'sending', label: t('statusSending') };
+    if (item.draft && item.status === STATUS.READY) return { cls: 'draft', label: t('popupDraftTag') };
     return (
       {
         [STATUS.WAITING]: { cls: 'waiting', label: t('statusWaiting') },
@@ -104,7 +105,15 @@
       'tab-closed-during-send': 'errTabClosed',
       'send-interrupted': 'errInterrupted',
       'not-detected': 'errNotDetected',
-      'send-button-unavailable': 'errSendButton'
+      'send-button-unavailable': 'errSendButton',
+      'conversation-missing': 'reasonConversationMissing',
+      'not-sent': 'reasonNotSent',
+      uncertain: 'reasonUncertain',
+      'fill-failed': 'reasonFillFailed',
+      'editor-missing': 'reasonEditor',
+      'stale-limit': 'reasonStaleLimit',
+      duplicate: 'reasonDuplicate',
+      'new-chat-url-unknown': 'reasonNewChatUrl'
     };
     return map[code] ? t(map[code]) : t('errGeneric', { code });
   }

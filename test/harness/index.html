@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Claude Queue restore harness</title>
+<style>
+  body { font: 14px system-ui; margin: 20px; }
+  fieldset { border: 1px solid #ccc; padding: 8px; display: flex; gap: 8px; }
+  .ProseMirror { flex: 1; min-height: 40px; border: 1px solid #999; padding: 4px; }
+  #msgs div { background: #eef; margin: 4px 0; padding: 4px; white-space: pre-wrap; }
+  #out { white-space: pre-wrap; font-family: monospace; margin-top: 16px; }
+</style>
+<!--
+  用法（從 repo 根目錄）：
+    python3 -m http.server 8765
+    開啟 http://localhost:8765/test/harness/index.html  → 自動跑完所有情境，結果在頁面底部與 window.__results
+  這是「假的 claude.ai」：只模擬輸入框、送出按鈕、使用者訊息氣泡、停止按鈕與網址切換，
+  載入的是真正的 content scripts（chrome API 與 service worker 以頁面內 stub 取代）。
+-->
+<script>
+  // ── chrome API stub ──
+  const zh = (() => {
+    const x = new XMLHttpRequest();
+    x.open('GET', '/_locales/zh_TW/messages.json', false);
+    x.send();
+    return JSON.parse(x.responseText);
+  })();
+  const mem = { settings: { autoSend: true, notifications: true, pollMinutes: 2 } };
+  window.__calls = [];
+  window.__swReply = {};
+  const swDefault = {
+    'queue:claim': () => ({ ok: true, token: 'T' }),
+    'restore:check': () => ({ item: null }),
+    'restore:next': () => ({ item: null }),
+    'queue:add': (m) => ({ ok: true, item: { id: 'draft1', ...m.item } })
+  };
+  window.chrome = {
+    runtime: {
+      id: 'ext',
+      async sendMessage(msg) {
+        if (msg.type !== 'log' && msg.type !== 'usage:snapshot') window.__calls.push(JSON.parse(JSON.stringify(msg)));
+        const f = window.__swReply[msg.type] || swDefault[msg.type];
+        return f ? f(msg) : { ok: true };
+      },
+      onMessage: { addListener() {} }
+    },
+    i18n: { getMessage: (k) => (zh[k] ? zh[k].message : '') },
+    storage: {
+      local: {
+        async get(keys) {
+          const out = {};
+          for (const k of [].concat(keys || Object.keys(mem))) if (k in mem) out[k] = mem[k];
+          return out;
+        },
+        async set(o) { Object.assign(mem, o); },
+        async remove(k) { delete mem[k]; }
+      },
+      onChanged: { addListener() {} }
+    }
+  };
+</script>
+<script src="/src/shared/constants.js"></script>
+<script>
+  // 測試用：縮短等待時間（其他模組在載入時讀取 CQ.TIMING）
+  CQ.TIMING = Object.freeze({ ...CQ.TIMING, SEND_DETECT_TIMEOUT_MS: 3000, SEND_BUTTON_WAIT_MS: 1500, COMPOSER_WAIT_MS: 3000 });
+</script>
+<script src="/src/shared/i18n.js"></script>
+<script src="/src/shared/settings.js"></script>
+<script src="/src/shared/logger.js"></script>
+<script src="/src/shared/text.js"></script>
+<script src="/src/content/selectors.js"></script>
+<script src="/src/content/usage.js"></script>
+<script src="/src/content/editor.js"></script>
+<script src="/src/content/ui.js"></script>
+<script src="/src/content/sender.js"></script>
+<script src="/src/content/interceptor.js"></script>
+<script src="/src/content/restore.js"></script>
+<script src="/src/content/main.js"></script>
+</head>
+<body>
+<div id="msgs"></div>
+<div id="banner"></div>
+<fieldset>
+  <div class="ProseMirror" contenteditable="true"></div>
+  <button aria-label="Send message" disabled>Send</button>
+</fieldset>
+<div id="out">running…</div>
+<script>
+  // ── 假的 claude.ai 行為 ──
+  const ed = document.querySelector('.ProseMirror');
+  const btn = document.querySelector('button[aria-label="Send message"]');
+  const msgs = document.getElementById('msgs');
+  window.fake = { mode: 'normal' }; // normal | stale | enterOnly | ignore | clearOnly | markdown
+  const editorText = () => CQ.editor.getText(ed);
+  const syncBtn = () => { btn.disabled = fake.mode === 'stale' || fake.mode === 'enterOnly' || !editorText(); };
+  ed.addEventListener('input', syncBtn);
+  new MutationObserver(syncBtn).observe(ed, { childList: true, subtree: true, characterData: true });
+
+  function doSend() {
+    const text = editorText();
+    if (!text || fake.mode === 'ignore') return;
+    ed.innerHTML = '';
+    syncBtn();
+    if (fake.mode === 'clearOnly') return;
+    const m = document.createElement('div');
+    m.dataset.testid = 'user-message';
+    m.textContent = fake.mode === 'markdown' ? CQ.text.stripMarkdown(text).replace(/(.{10})/g, '$1 ') : text;
+    msgs.appendChild(m);
+    const stop = document.createElement('button');
+    stop.setAttribute('aria-label', 'Stop response');
+    document.body.appendChild(stop);
+    setTimeout(() => stop.remove(), 600);
+    if (CQ.text.isNewChatUrl(location.href)) setTimeout(() => history.pushState({}, '', '/chat/new123'), 300);
+  }
+  btn.addEventListener('click', doSend);
+  ed.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && fake.mode !== 'ignore') { e.preventDefault(); doSend(); }
+  });
+
+  // 用量：API 結果由測試指定，DOM 判斷用真正的 detectLimitFromDom
+  window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+  CQ.usage.getStatus = async () => CQ.usage.buildSnapshot(window.__api, CQ.usage.detectLimitFromDom(), null);
+
+  // ── 測試情境 ──
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const origin = location.origin;
+  async function waitIdle(timeout = 20000) {
+    const end = Date.now() + timeout;
+    await sleep(100);
+    while (CQ.restore.getCurrentId() && Date.now() < end) await sleep(100);
+    await sleep(700); // continueWithNext / check
+  }
+  async function reset(path, { mode = 'normal', draft = '', banner = false } = {}) {
+    await waitIdle();
+    fake.mode = mode;
+    msgs.innerHTML = '';
+    ed.innerHTML = draft ? `<p>${draft}</p>` : '';
+    syncBtn();
+    document.getElementById('banner').innerHTML = banner
+      ? '<div role="alert">You have reached your usage limit. Your limit resets at 3:00 PM</div>'
+      : '';
+    history.pushState({}, '', path);
+    await sleep(700); // 讓 main.js 的換頁偵測先跑完
+    window.__calls = [];
+  }
+  const types = () => __calls.map((c) => c.type);
+  const call = (type) => __calls.find((c) => c.type === type);
+  const lastMsg = () => (msgs.lastElementChild ? msgs.lastElementChild.textContent : null);
+  const item = (over = {}) => ({ id: 'x' + Math.random().toString(36).slice(2, 7), text: 'hello world', url: origin + '/chat/aaa', ...over });
+
+  const scenarios = {
+    async autoHappyPath() {
+      await reset('/chat/aaa');
+      CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      return { pass: lastMsg() === 'hello world' && !!call('queue:markSent') && types().includes('restore:done'), types: types() };
+    },
+    async navigateDuringCountdown() {
+      await reset('/chat/aaa');
+      CQ.restore.start(item(), 'auto');
+      await sleep(1200);
+      history.pushState({}, '', '/chat/bbb');
+      await waitIdle();
+      return { pass: lastMsg() === null && !!call('restore:reopen') && !call('queue:markSent'), types: types() };
+    },
+    async wrongConversationAtStart() {
+      await reset('/chat/zzz');
+      CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      return { pass: lastMsg() === null && !!call('restore:reopen') && !call('queue:claim'), types: types() };
+    },
+    async staleLimitBanner() {
+      await reset('/chat/aaa', { banner: true });
+      CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      const r = call('restore:retry');
+      return { pass: lastMsg() === null && r && r.reason === 'stale-limit', types: types() };
+    },
+    async realLimitStillFull() {
+      await reset('/chat/aaa');
+      window.__api = { session: { pct: 100, resetsAt: Date.now() + 3600e3 }, weekly: { pct: 10 }, extras: [] };
+      CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      const r = call('queue:release');
+      return { pass: lastMsg() === null && r && r.status === 'waiting', types: types() };
+    },
+    async disabledButtonEnterFallback() {
+      await reset('/chat/aaa', { mode: 'enterOnly' });
+      CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      return { pass: lastMsg() === 'hello world' && !!call('queue:markSent'), types: types() };
+    },
+    async nothingHappensSafeRetry() {
+      await reset('/chat/aaa', { mode: 'ignore' });
+      CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      const r = call('restore:retry');
+      return { pass: lastMsg() === null && r && r.reason === 'not-sent' && !call('queue:markFailed'), types: types() };
+    },
+    async uncertainNoRetry() {
+      await reset('/chat/aaa', { mode: 'clearOnly' });
+      CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      const g = call('restore:giveUp');
+      return { pass: g && g.reason === 'uncertain' && !call('restore:retry'), types: types() };
+    },
+    async markdownDetected() {
+      await reset('/chat/aaa', { mode: 'markdown' });
+      CQ.restore.start(item({ text: '# Title\n- **bold** item\n- `code` here' }), 'auto');
+      await waitIdle();
+      const s = call('queue:markSent');
+      return { pass: s && s.confidence === 'strong', types: types(), confidence: s && s.confidence };
+    },
+    async draftSavedThenSent() {
+      await reset('/chat/aaa', { draft: 'my own draft' });
+      CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      const add = call('queue:add');
+      return {
+        pass: add && add.item.draft === true && add.item.text === 'my own draft' && lastMsg() === 'hello world',
+        types: types()
+      };
+    },
+    async newChatGroupRebind() {
+      await reset('/new');
+      CQ.restore.start(item({ url: origin + '/new', newChatGroup: 'G' }), 'auto');
+      await waitIdle();
+      const rb = call('queue:rebind');
+      return { pass: rb && rb.group === 'G' && rb.url === origin + '/chat/new123', types: types() };
+    },
+    async busyTabRejectsSecondStart() {
+      await reset('/chat/aaa');
+      const a = CQ.restore.start(item(), 'auto');
+      const b = CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      return { pass: a === true && b === false && __calls.filter((c) => c.type === 'queue:markSent').length === 1, types: types() };
+    }
+  };
+
+  (async () => {
+    await sleep(1500);
+    const results = {};
+    for (const [name, fn] of Object.entries(scenarios)) {
+      try {
+        results[name] = await fn();
+      } catch (e) {
+        results[name] = { pass: false, error: String(e && e.stack || e) };
+      }
+    }
+    window.__results = results;
+    const lines = Object.entries(results).map(([k, v]) => `${v.pass ? 'PASS' : 'FAIL'}  ${k}${v.pass ? '' : '  ' + JSON.stringify(v)}`);
+    document.getElementById('out').textContent = lines.join('\n') + '\n\nDONE';
+    window.__done = true;
+  })();
+</script>
+</body>
+</html>

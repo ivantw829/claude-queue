@@ -17,6 +17,18 @@
 
   let allowUntil = 0;
   let handling = false;
+  // 新對話群組：同一次停留在新對話頁時排入的訊息共用一個 id，之後依序送進同一個新對話
+  let newChatGroup = null;
+
+  function onNavigate() {
+    newChatGroup = null;
+  }
+
+  function currentNewChatGroup() {
+    if (!CQ.text.isNewChatUrl(location.href)) return null;
+    if (!newChatGroup) newChatGroup = CQ.text.uuid();
+    return newChatGroup;
+  }
 
   function allowNextSend() {
     allowUntil = Date.now() + 2000;
@@ -127,7 +139,8 @@
         url: location.href,
         resetAt,
         resetEstimated: !!estimated,
-        reasons: d.reasons || []
+        reasons: d.reasons || [],
+        newChatGroup: currentNewChatGroup()
       }
     });
     if (!res || !res.ok || !res.item) {
@@ -182,5 +195,5 @@
     log.debug('interceptor installed');
   }
 
-  CQ.interceptor = { install, allowNextSend, decideSync };
+  CQ.interceptor = { install, allowNextSend, decideSync, onNavigate };
 })(globalThis);

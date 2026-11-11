@@ -40,13 +40,17 @@
     PRE_SEND_RECHECK_TIMEOUT_MS: 3000,
     USAGE_FETCH_TIMEOUT_MS: 8000,
     GENERATION_WAIT_MS: 10 * 60 * 1000,
-    AUTO_SEND_COUNTDOWN_S: 3
+    AUTO_SEND_COUNTDOWN_S: 3,
+    SEND_BUTTON_WAIT_MS: 8000, // 填入後等送出按鈕變成可按
+    NEW_CHAT_URL_WAIT_MS: 15 * 1000, // 新對話送出後等網址變成 /chat/<id>
+    RESTORE_CHECK_DELAYS_MS: [1500, 5000, 10000] // 頁面載入後領取還原工作的時間點
   });
 
   CQ.LIMITS = Object.freeze({
     MAX_LOGS: 500,
     MAX_SENT_IDS: 200,
-    PASTE_FALLBACK_MAX_CHARS: 2000 // 過長的貼上會被 claude.ai 轉為附件，故限制
+    PASTE_FALLBACK_MAX_CHARS: 2000, // 過長的貼上會被 claude.ai 轉為附件，故限制
+    MAX_RESTORE_RETRIES: 2 // 確定未送出時，重新整理分頁後重試的次數上限
   });
 
   CQ.MSG = Object.freeze({
@@ -62,6 +66,11 @@
     QUEUE_MARK_SENT_BY_TEXT: 'queue:markSentByText',
     RESTORE_CHECK: 'restore:check',
     RESTORE_NEXT: 'restore:next',
+    RESTORE_RETRY: 'restore:retry', // 確定未送出 → 重新整理分頁後重試
+    RESTORE_REOPEN: 'restore:reopen', // 目前分頁不是原對話 → 重新開啟正確對話
+    RESTORE_DONE: 'restore:done', // 這個分頁的還原結束 → 自動模式繼續處理其他對話
+    RESTORE_GIVE_UP: 'restore:giveUp', // 自動送出無法完成 → 標記失敗並通知
+    QUEUE_REBIND: 'queue:rebind', // 新對話群組：把後續項目改指向剛建立的對話
     USAGE_SNAPSHOT: 'usage:snapshot',
     USAGE_REFRESH_REQUEST: 'usage:refreshRequest',
     CLEAR_ALL: 'data:clearAll',

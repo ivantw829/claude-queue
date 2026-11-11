@@ -60,31 +60,57 @@
 
   // ───────────── 送出 ─────────────
 
-  async function waitForEnabledSendButton(timeoutMs = 3000) {
+  function isEnabled(btn) {
+    return !!btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true';
+  }
+
+  async function waitForEnabledSendButton(timeoutMs = TIMING.SEND_BUTTON_WAIT_MS) {
     const end = Date.now() + timeoutMs;
     let btn = null;
     while (Date.now() < end) {
       btn = CQ.selectors.getSendButton();
-      if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') return btn;
+      if (isEnabled(btn)) return btn;
       await sleep(100);
     }
     if (!btn) CQ.selectors.reportMissing('sendButton');
     return null;
   }
 
+  /** 備援：對輸入框送 Enter（ProseMirror 的 keymap 會處理；interceptor 忽略非 trusted 事件） */
+  function pressEnter() {
+    const editor = CQ.editor.getEditor();
+    if (!editor) return false;
+    editor.focus();
+    const init = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    editor.dispatchEvent(new KeyboardEvent('keydown', init));
+    editor.dispatchEvent(new KeyboardEvent('keyup', init));
+    return true;
+  }
+
   /**
    * 按下送出並等待訊息出現在對話中。
-   * @returns {Promise<{ok: boolean, confidence?: 'strong'|'weak', error?: string}>}
+   * 失敗時 error 會區分：
+   *   'send-button-unavailable' / 'not-sent'：確定沒有送出（文字仍完整在輸入框）→ 可以安全重試
+   *   'uncertain'：可能已送出 → 不可自動重試，避免重複
+   * @returns {Promise<{ok: boolean, confidence?: 'strong'|'weak', error?: string, safeToRetry?: boolean}>}
    */
   async function clickSendAndConfirm(text) {
     const btn = await waitForEnabledSendButton();
-    if (!btn) return { ok: false, error: 'send-button-unavailable' };
-
     const before = snapshotMessages();
     CQ.interceptor.allowNextSend(); // 不要攔截我們自己觸發的送出
-    btn.click();
-    log.info('send button clicked', { beforeCount: before.count });
-    return detectSent(text, before);
+    if (btn) {
+      btn.click();
+      log.info('send button clicked', { beforeCount: before.count });
+    } else {
+      log.warn('send button unavailable, trying Enter fallback');
+      if (!pressEnter()) return { ok: false, error: 'send-button-unavailable', safeToRetry: true };
+    }
+    const r = await detectSent(text, before);
+    if (r.ok) return r;
+
+    // Enter 備援也沒反應時，回報成「找不到送出按鈕」比較好懂
+    if (r.error === 'not-sent' && !btn) return { ok: false, error: 'send-button-unavailable', safeToRetry: true };
+    return r;
   }
 
   async function detectSent(text, before, timeoutMs = TIMING.SEND_DETECT_TIMEOUT_MS) {
@@ -94,24 +120,44 @@
       await sleep(250);
       const msgs = userMessages();
       const last = msgs[msgs.length - 1];
-      if (last && last !== before.lastEl && CQ.text.textStartsMatch(messageText(last), text)) {
+      const isNewLast = last && last !== before.lastEl;
+      if (isNewLast && CQ.text.renderedMatches(messageText(last), text)) {
         return { ok: true, confidence: 'strong' };
       }
-      // 選擇器失效時的弱判斷：輸入框已清空，且開始生成回應或網址變了（/new → /chat/...）
-      if (!msgs.length) {
-        const started = !!CQ.selectors.find('stopButton') || location.href !== before.url;
-        if (CQ.editor.isEmpty() && started) {
-          if (!weakSince) weakSince = Date.now();
-          if (Date.now() - weakSince > 1000) {
-            CQ.selectors.reportMissing('userMessage');
-            return { ok: true, confidence: 'weak' };
-          }
-        } else {
-          weakSince = 0;
+      const started = !!CQ.selectors.find('stopButton') || location.href !== before.url;
+      // 弱判斷 1：多了一則使用者訊息且輸入框已清空（Markdown 渲染後文字對不上的情況）
+      // 弱判斷 2：選擇器失效（找不到任何訊息），輸入框已清空，且開始生成回應或網址變了（/new → /chat/...）
+      const weakSignal =
+        CQ.editor.isEmpty() && ((isNewLast && msgs.length > before.count) || (!msgs.length && started));
+      if (weakSignal) {
+        if (!weakSince) weakSince = Date.now();
+        if (Date.now() - weakSince > 1000) {
+          if (!msgs.length) CQ.selectors.reportMissing('userMessage');
+          return { ok: true, confidence: 'weak' };
         }
+      } else {
+        weakSince = 0;
       }
     }
-    return { ok: false, error: 'not-detected' };
+    // 逾時：文字仍完整留在輸入框、沒有新訊息、也沒開始生成 → 確定沒送出
+    const msgs = userMessages();
+    const untouched =
+      CQ.text.sameText(CQ.editor.getText(), text) &&
+      msgs.length === before.count &&
+      !CQ.selectors.find('stopButton') &&
+      CQ.text.conversationKey(location.href) === CQ.text.conversationKey(before.url);
+    if (untouched) return { ok: false, error: 'not-sent', safeToRetry: true };
+    return { ok: false, error: 'uncertain', safeToRetry: false };
+  }
+
+  /** 新對話送出後，等網址從 /new 變成 /chat/<id>（取得新對話網址） */
+  async function waitForConversationUrl(timeoutMs = TIMING.NEW_CHAT_URL_WAIT_MS) {
+    const end = Date.now() + timeoutMs;
+    while (Date.now() < end) {
+      if (!CQ.text.isNewChatUrl(location.href)) return location.href;
+      await sleep(250);
+    }
+    return null;
   }
 
   async function waitForGenerationDone(timeoutMs = TIMING.GENERATION_WAIT_MS) {
@@ -131,6 +177,7 @@
     findDuplicateInConversation,
     clickSendAndConfirm,
     detectSent,
-    waitForGenerationDone
+    waitForGenerationDone,
+    waitForConversationUrl
   };
 })(globalThis);
