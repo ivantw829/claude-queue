@@ -30,6 +30,26 @@
     return r.slice(0, n) === o.slice(0, n);
   }
 
+  // 去除常見 Markdown 標記（訊息氣泡會把它們渲染掉）並移除所有空白，只留內容字元
+  function stripMarkdown(text) {
+    return normalizeForCompare(text)
+      .replace(/```[^\n]*\n?/g, '')
+      .replace(/^\s{0,3}(#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+)/gm, '')
+      .replace(/[*_~`]/g, '')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\s+/g, '');
+  }
+
+  /** 渲染後的訊息氣泡是否就是這段原文（先比原文開頭，再比去除格式後的開頭） */
+  function renderedMatches(rendered, original, len = 200) {
+    if (textStartsMatch(rendered, original, len)) return true;
+    const r = stripMarkdown(rendered);
+    const o = stripMarkdown(original);
+    if (!r || !o) return false;
+    const n = Math.min(len, o.length);
+    return r.slice(0, n) === o.slice(0, n);
+  }
+
   // 對話識別：/chat/<uuid>、/project/<uuid>、/new。忽略 query 與 hash。
   function conversationKey(url) {
     try {
@@ -59,5 +79,15 @@
     return s.length > n ? s.slice(0, n) + '…' : s;
   }
 
-  CQ.text = { normalizeForCompare, sameText, textStartsMatch, conversationKey, isNewChatUrl, uuid, preview };
+  CQ.text = {
+    normalizeForCompare,
+    sameText,
+    textStartsMatch,
+    stripMarkdown,
+    renderedMatches,
+    conversationKey,
+    isNewChatUrl,
+    uuid,
+    preview
+  };
 })(globalThis);
