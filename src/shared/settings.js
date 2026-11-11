@@ -8,6 +8,8 @@
 
   const DEFAULTS = Object.freeze({
     autoSend: false, // 重置後自動送出（不需確認）
+    autoReset: false, // 自動重設：工作階段歸零時送出一則訊息，讓下一個工作階段馬上開始倒數
+    autoResetText: 'Hello World!', // 自動重設送出的文字（可在設定頁修改）
     notifications: true, // 桌面通知
     pollMinutes: 2, // 用量輪詢頻率（分鐘）
     debugLog: false, // 記錄 debug log
@@ -23,6 +25,7 @@
     const s = { ...DEFAULTS, ...(raw || {}) };
     s.pollMinutes = Math.min(30, Math.max(1, Number(s.pollMinutes) || DEFAULTS.pollMinutes));
     s.debugSimulateMinutes = Math.min(600, Math.max(1, Number(s.debugSimulateMinutes) || 2));
+    s.autoResetText = String(s.autoResetText || '').trim().slice(0, 200) || DEFAULTS.autoResetText;
     return s;
   }
 

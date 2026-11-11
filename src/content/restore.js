@@ -215,8 +215,16 @@
       return 'stopped';
     }
 
-    // 你可能已經手動送出過相同內容
-    if (CQ.sender.findDuplicateInConversation(item.text)) {
+    // 自動重設：工作階段其實已經在進行（例如你用手機送過訊息）→ 不需要送
+    if (item.keepalive && sessionActive(snap)) {
+      log.info('keepalive skipped: session already active');
+      await bg(MSG.QUEUE_DELETE, { id: item.id });
+      return 'stopped';
+    }
+    if (item.keepalive) CQ.ui.toast(t('toastKeepalive'), { kind: 'info', duration: 8000 });
+
+    // 你可能已經手動送出過相同內容（自動重設的專用對話裡本來就有很多相同訊息，不檢查）
+    if (!item.keepalive && CQ.sender.findDuplicateInConversation(item.text)) {
       if (auto) {
         // 不確定是不是已經送過 → 不自動送，交給你決定
         await giveUp(c, 'duplicate');
@@ -444,6 +452,7 @@
       log.info('queued message sent', { id: item.id, confidence: r.confidence });
       CQ.ui.toast(t(r.confidence === 'weak' ? 'toastSentWeak' : 'toastSent'), { kind: 'success' });
       await rebindNewChatGroup(c);
+      await bindKeepaliveConversation(c);
       return 'sent';
     }
 
@@ -466,6 +475,20 @@
     const url = await CQ.sender.waitForConversationUrl();
     log.info('new chat url for group', { found: !!url });
     await bg(MSG.QUEUE_REBIND, { group: item.newChatGroup, url });
+  }
+
+  /** 工作階段正在進行中（API 回報的結束時間在未來） */
+  function sessionActive(snap) {
+    return !!(snap && snap.session && Number(snap.session.resetsAt) > Date.now());
+  }
+
+  /** 自動重設第一次在新對話送出 → 回報建立的對話網址，之後都送進這個專用對話 */
+  async function bindKeepaliveConversation(c) {
+    const { item } = c;
+    if (!item.keepalive || !CQ.text.isNewChatUrl(item.url)) return;
+    const url = await CQ.sender.waitForConversationUrl();
+    log.info('keepalive conversation url', { found: !!url });
+    if (url) await bg(MSG.KEEPALIVE_BOUND, { url });
   }
 
   /** 同一對話還有其他項目 → 等回應生成完再依序處理；沒有 → 自動模式交給 SW 處理其他對話 */

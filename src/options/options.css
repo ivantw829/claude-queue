@@ -33,6 +33,10 @@ input[type="number"] { width: 72px; padding: 4px 6px; border-radius: 6px; border
   background: #fdecea; color: #8e1c14; border: 1px solid #f1a59f; font-size: 13px; font-weight: 600;
 }
 @media (prefers-color-scheme: dark) { .danger-box { background: #3d2322; color: #ffb4ab; border-color: #7a3631; } }
+.about { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.about dt { color: var(--muted); }
+.about dd { margin: 0; overflow-wrap: anywhere; }
+.about a { color: var(--accent); }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 button {

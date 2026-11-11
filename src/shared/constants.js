@@ -13,7 +13,8 @@
     PENDING_RESTORE: 'pendingRestore', // { itemId, tabId, mode, at }
     SENT_IDS: 'sentIds', // string[]，已送出項目 id，防重複
     LOGS: 'logs', // LogEntry[]
-    ORG_ID: 'orgId' // 快取的 organization uuid
+    ORG_ID: 'orgId', // 快取的 organization uuid
+    KEEPALIVE: 'keepalive' // 自動重設狀態 { conversationUrl, lastAttemptAt, lastSentAt, lastError }
   });
 
   // 佇列項目狀態
@@ -25,7 +26,8 @@
   });
 
   CQ.ALARMS = Object.freeze({
-    RESET_CHECK: 'cq-reset-check'
+    RESET_CHECK: 'cq-reset-check',
+    KEEPALIVE: 'cq-keepalive' // 自動重設：工作階段結束後檢查並送出訊息
   });
 
   CQ.TIMING = Object.freeze({
@@ -43,7 +45,10 @@
     AUTO_SEND_COUNTDOWN_S: 3,
     SEND_BUTTON_WAIT_MS: 8000, // 填入後等送出按鈕變成可按
     NEW_CHAT_URL_WAIT_MS: 15 * 1000, // 新對話送出後等網址變成 /chat/<id>
-    RESTORE_CHECK_DELAYS_MS: [1500, 5000, 10000] // 頁面載入後領取還原工作的時間點
+    RESTORE_CHECK_DELAYS_MS: [1500, 5000, 10000], // 頁面載入後領取還原工作的時間點
+    KEEPALIVE_BUFFER_MS: 90 * 1000, // 工作階段結束後再等 90 秒（比佇列的重置檢查晚，讓排隊的訊息先送）
+    KEEPALIVE_COOLDOWN_MS: 10 * 60 * 1000, // 自動重設兩次嘗試之間的最短間隔
+    SESSION_LENGTH_MS: 5 * 60 * 60 * 1000 // 工作階段長度（API 沒給結束時間時用來估計）
   });
 
   CQ.LIMITS = Object.freeze({
@@ -71,6 +76,7 @@
     RESTORE_DONE: 'restore:done', // 這個分頁的還原結束 → 自動模式繼續處理其他對話
     RESTORE_GIVE_UP: 'restore:giveUp', // 自動送出無法完成 → 標記失敗並通知
     QUEUE_REBIND: 'queue:rebind', // 新對話群組：把後續項目改指向剛建立的對話
+    KEEPALIVE_BOUND: 'keepalive:bound', // 自動重設：回報專用對話的網址
     USAGE_SNAPSHOT: 'usage:snapshot',
     USAGE_REFRESH_REQUEST: 'usage:refreshRequest',
     CLEAR_ALL: 'data:clearAll',

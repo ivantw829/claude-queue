@@ -9,7 +9,7 @@
 | 名稱 | Claude Queue |
 | 類別 (Category) | Productivity（生產力工具） |
 | 語言 (Language) | 繁體中文（主要），可另外加 English |
-| 版本 | 0.1.0（照 `manifest.json`） |
+| 版本 | 0.2.0（照 `manifest.json`） |
 
 ## 2. 單一用途說明（Single purpose）
 

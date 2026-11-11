@@ -8,6 +8,8 @@
 
   let queue = [];
   let usage = null;
+  let keepalive = null; // 自動重設狀態
+  let autoReset = false;
   let sourceNote = ''; // 暫時提示（例如沒有開著的 claude.ai 分頁）
   const editing = new Set(); // 正在編輯的項目 id（重繪時保留狀態）
 
@@ -80,6 +82,7 @@
 
   function badgeFor(item) {
     if (item.claim) return { cls: 'sending', label: t('statusSending') };
+    if (item.keepalive) return { cls: 'keepalive', label: t('popupKeepaliveTag') };
     if (item.draft && item.status === STATUS.READY) return { cls: 'draft', label: t('popupDraftTag') };
     return (
       {
@@ -113,7 +116,9 @@
       'editor-missing': 'reasonEditor',
       'stale-limit': 'reasonStaleLimit',
       duplicate: 'reasonDuplicate',
-      'new-chat-url-unknown': 'reasonNewChatUrl'
+      'new-chat-url-unknown': 'reasonNewChatUrl',
+      'draft-save-failed': 'reasonGeneric',
+      generic: 'reasonGeneric'
     };
     return map[code] ? t(map[code]) : t('errGeneric', { code });
   }
@@ -122,6 +127,7 @@
     const list = document.getElementById('queueList');
     const tpl = document.getElementById('itemTpl');
     const active = queue.filter((i) => i.status !== STATUS.SENT);
+    const countable = active.filter((i) => !i.keepalive);
     document.getElementById('queueCount').textContent = active.length ? `(${active.length})` : '';
     document.getElementById('queueEmpty').hidden = active.length > 0;
 
@@ -259,6 +265,8 @@
   // ───────────── 初始化 ─────────────
 
   async function init() {
+    // 顯示目前載入的版本，方便確認更新是否已生效
+    document.getElementById('version').textContent = 'v' + chrome.runtime.getManifest().version;
     const data = await chrome.storage.local.get([K.QUEUE, K.USAGE]);
     queue = data[K.QUEUE] || [];
     usage = data[K.USAGE] || null;
