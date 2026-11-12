@@ -78,7 +78,7 @@ All DOM selectors live in `src/content/selectors.js`, each as a list of fallback
 ## Constraints from the original spec
 
 - Permissions stay minimal: `storage`, `alarms`, `notifications`, host `https://claude.ai/*`.
-- No external servers, no remote code, no data upload.
+- No external servers, no remote code, no data upload. The single exception is the new-version check (`checkForUpdate` in the SW): once a day, only for unpacked/development installs and only while the `updateCheck` setting is on, it GETs the public `manifest.json` on GitHub (`CQ.version.MANIFEST_URL`) with no parameters or cookies. Pushing a higher manifest version to `main` therefore notifies every GitHub user.
 - Never forge or replay claude.ai's internal chat requests. Sending is always done by filling the editor and clicking the real send button.
 - Text plus files the user attached from their computer are queued. Attachments the extension can't capture (Drive/GitHub, long-paste attachments, files attached before the content script loaded) mean the message is left alone. Attachment-only messages (no text) are never queued.
 - Debug logs must not contain message content or attachment file names.

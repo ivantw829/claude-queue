@@ -61,6 +61,18 @@
       </section>
 
       <section class="card">
+        <h2 data-i18n="optSectionUpdate"></h2>
+        <label class="row">
+          <input type="checkbox" id="updateCheck" />
+          <span>
+            <strong data-i18n="optUpdateCheck"></strong>
+            <span class="desc" data-i18n="optUpdateCheckDesc"></span>
+          </span>
+        </label>
+        <p class="muted small" id="updateStatus"></p>
+      </section>
+
+      <section class="card">
         <h2 data-i18n="optSectionDebug"></h2>
         <label class="row">
           <input type="checkbox" id="debugLog" />
@@ -106,6 +118,8 @@
         <dl class="about">
           <dt data-i18n="optVersion"></dt>
           <dd id="version"></dd>
+          <dt data-i18n="optGuide"></dt>
+          <dd><a id="guideLink" target="_blank" rel="noopener noreferrer"></a></dd>
           <dt data-i18n="optGithub"></dt>
           <dd><a href="https://github.com/ivantw829/claude-queue" target="_blank" rel="noopener noreferrer">github.com/ivantw829/claude-queue</a></dd>
           <dt data-i18n="optDeveloper"></dt>
@@ -120,6 +134,7 @@
     <script src="../shared/i18n.js"></script>
     <script src="../shared/settings.js"></script>
     <script src="../shared/logger.js"></script>
+    <script src="../shared/version.js"></script>
     <script src="options.js"></script>
   </body>
 </html>

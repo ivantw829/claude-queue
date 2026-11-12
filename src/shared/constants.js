@@ -14,7 +14,8 @@
     SENT_IDS: 'sentIds', // string[]，已送出項目 id，防重複
     LOGS: 'logs', // LogEntry[]
     ORG_ID: 'orgId', // 快取的 organization uuid
-    KEEPALIVE: 'keepalive' // 自動重設狀態 { conversationUrl, lastAttemptAt, lastSentAt, lastError }
+    KEEPALIVE: 'keepalive', // 自動重設狀態 { conversationUrl, lastAttemptAt, lastSentAt, lastError }
+    UPDATE: 'update' // 新版本檢查 { latest, checkedAt, error, notifiedVersion, dismissedVersion, updatedFrom }
   });
 
   // 佇列項目狀態
@@ -27,7 +28,8 @@
 
   CQ.ALARMS = Object.freeze({
     RESET_CHECK: 'cq-reset-check',
-    KEEPALIVE: 'cq-keepalive' // 自動重設：工作階段結束後檢查並送出訊息
+    KEEPALIVE: 'cq-keepalive', // 自動重設：工作階段結束後檢查並送出訊息
+    UPDATE_CHECK: 'cq-update-check' // 每天檢查一次 GitHub 上有沒有新版本
   });
 
   CQ.TIMING = Object.freeze({
@@ -88,6 +90,7 @@
     USAGE_SNAPSHOT: 'usage:snapshot',
     USAGE_REFRESH_REQUEST: 'usage:refreshRequest',
     CLEAR_ALL: 'data:clearAll',
+    UPDATE_DISMISS: 'update:dismiss', // popup 關掉「有新版本」或「已更新」提示
     LOG: 'log',
     // service worker -> content
     USAGE_REFRESH: 'usage:refresh',

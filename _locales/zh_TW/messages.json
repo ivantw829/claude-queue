@@ -607,5 +607,56 @@
   },
   "popupFiles": {
     "message": "📎 {count} 個附件（{size}）：{names}"
+  },
+  "notifyUpdateTitle": {
+    "message": "Claude Queue 有新版本"
+  },
+  "notifyUpdateBody": {
+    "message": "新版本 v{version} 已推出（目前 v{current}）。點這裡看更新步驟。"
+  },
+  "updateAvailable": {
+    "message": "有新版本 v{version}"
+  },
+  "updateHowTo": {
+    "message": "如何更新"
+  },
+  "updateDone": {
+    "message": "已更新到 v{version}"
+  },
+  "updateChanges": {
+    "message": "看更新內容"
+  },
+  "btnDismiss": {
+    "message": "不再提示"
+  },
+  "optSectionUpdate": {
+    "message": "更新"
+  },
+  "optUpdateCheck": {
+    "message": "自動檢查新版本"
+  },
+  "optUpdateCheckDesc": {
+    "message": "每天一次，只讀取 GitHub 上的版本號，不會送出任何資料。有新版本時發一次通知，工具列小視窗也會顯示提示。從 Chrome 線上應用程式商店安裝時不會檢查（商店會自動更新）。"
+  },
+  "optUpdateNever": {
+    "message": "還沒檢查過"
+  },
+  "optUpdateLatest": {
+    "message": "最後檢查：{time}，已是最新版本（v{version}）"
+  },
+  "optUpdateNewer": {
+    "message": "最後檢查：{time}，有新版本 v{version}"
+  },
+  "optUpdateError": {
+    "message": "最後檢查：{time}，檢查失敗（{error}），明天會再試"
+  },
+  "optUpdateStore": {
+    "message": "從商店安裝，Chrome 會自動更新，不需要檢查"
+  },
+  "optGuide": {
+    "message": "使用教學"
+  },
+  "optGuideLink": {
+    "message": "新手教學：從安裝到使用"
   }
 }

@@ -9,6 +9,7 @@
   let queue = [];
   let usage = null;
   let keepalive = null; // 自動重設狀態
+  let update = null; // 新版本檢查狀態
   let autoReset = false;
   let pollMs = 2 * 60 * 1000; // 用量輪詢間隔（估計下次檢查時間用）
   let alarmAt = null; // 自動重設 alarm 的排程時間
@@ -328,12 +329,47 @@
     });
   }
 
+  // ───────────── 新版本／已更新提示 ─────────────
+
+  function renderUpdate() {
+    const box = document.getElementById('updateNotice');
+    const current = chrome.runtime.getManifest().version;
+    const st = update || {};
+    let kind = null;
+    if (st.latest && CQ.version.compare(st.latest, current) > 0 && st.dismissedVersion !== st.latest) kind = 'newer';
+    else if (st.updatedFrom && CQ.version.compare(current, st.updatedFrom) > 0) kind = 'updated';
+    box.hidden = !kind;
+    if (!kind) return;
+    const link = box.querySelector('.link');
+    if (kind === 'newer') {
+      box.querySelector('.msg').textContent = t('updateAvailable', { version: st.latest });
+      link.textContent = t('updateHowTo');
+      link.href = CQ.version.UPDATE_GUIDE_URL;
+    } else {
+      box.querySelector('.msg').textContent = t('updateDone', { version: current });
+      link.textContent = t('updateChanges');
+      link.href = CQ.version.CHANGES_URL;
+    }
+    box.dataset.kind = kind;
+  }
+
+  document.querySelector('#updateNotice .close').addEventListener('click', () => {
+    const kind = document.getElementById('updateNotice').dataset.kind;
+    if (kind) send(MSG.UPDATE_DISMISS, { kind });
+  });
+  // 看過更新內容就不用再提示
+  document.querySelector('#updateNotice .link').addEventListener('click', () => {
+    if (document.getElementById('updateNotice').dataset.kind === 'updated') send(MSG.UPDATE_DISMISS, { kind: 'updated' });
+  });
+
   // ───────────── 初始化 ─────────────
 
   async function init() {
     // 顯示目前載入的版本，方便確認更新是否已生效
     document.getElementById('version').textContent = 'v' + chrome.runtime.getManifest().version;
-    const data = await chrome.storage.local.get([K.QUEUE, K.USAGE, K.KEEPALIVE]);
+    const data = await chrome.storage.local.get([K.QUEUE, K.USAGE, K.KEEPALIVE, K.UPDATE]);
+    update = data[K.UPDATE] || null;
+    renderUpdate();
     queue = data[K.QUEUE] || [];
     usage = data[K.USAGE] || null;
     keepalive = data[K.KEEPALIVE] || null;
@@ -368,6 +404,10 @@
       if (changes[K.KEEPALIVE]) {
         keepalive = changes[K.KEEPALIVE].newValue || null;
         renderKeepalive();
+      }
+      if (changes[K.UPDATE]) {
+        update = changes[K.UPDATE].newValue || null;
+        renderUpdate();
       }
     });
 

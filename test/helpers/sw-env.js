@@ -10,7 +10,16 @@ const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..', '..');
 const zh = JSON.parse(fs.readFileSync(path.join(ROOT, '_locales/zh_TW/messages.json'), 'utf8'));
 
-function createEnv({ tabs = [], autoSend = true, contentReply = { ok: true } } = {}) {
+function createEnv({
+  tabs = [],
+  autoSend = true,
+  contentReply = { ok: true },
+  version = '0.3.0',
+  installType = 'development',
+  fetch = async () => {
+    throw new Error('network disabled in tests');
+  }
+} = {}) {
   const store = {};
   const listeners = {};
   const calls = { created: [], reloaded: [], sent: [], notified: [], focused: [] };
@@ -22,6 +31,7 @@ function createEnv({ tabs = [], autoSend = true, contentReply = { ok: true } } =
     runtime: {
       id: 'ext',
       getURL: (p) => 'chrome-extension://ext/' + p,
+      getManifest: () => ({ version }),
       onMessage: on('message'),
       onInstalled: on('installed'),
       onStartup: on('startup'),
@@ -51,7 +61,7 @@ function createEnv({ tabs = [], autoSend = true, contentReply = { ok: true } } =
     alarms: {
       _a: {},
       async create(name, o) {
-        this._a[name] = { name, scheduledTime: o.when };
+        this._a[name] = { name, scheduledTime: o.when, periodInMinutes: o.periodInMinutes };
       },
       async get(name) {
         return this._a[name];
@@ -95,10 +105,20 @@ function createEnv({ tabs = [], autoSend = true, contentReply = { ok: true } } =
       },
       onRemoved: on('tabRemoved')
     },
-    windows: { get: async () => ({ state: 'normal' }), update: async () => {} }
+    windows: { get: async () => ({ state: 'normal' }), update: async () => {} },
+    management: { getSelf: async () => ({ installType }) }
   };
 
-  const ctx = { chrome, console, setTimeout, clearTimeout, crypto: globalThis.crypto, URL };
+  const ctx = {
+    chrome,
+    console,
+    setTimeout,
+    clearTimeout,
+    crypto: globalThis.crypto,
+    URL,
+    AbortController,
+    fetch: (...a) => fetch(...a)
+  };
   ctx.globalThis = ctx;
   ctx.self = ctx;
   ctx.importScripts = (...files) => {

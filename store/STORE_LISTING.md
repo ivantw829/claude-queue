@@ -145,6 +145,12 @@ https://github.com/ivantw829/claude-queue/blob/main/PRIVACY.md
 | `notifications` | 用量重置或有佇列項目需要使用者確認送出時，透過桌面通知提醒使用者，這是這個擴充功能的核心功能。 |
 | Host permission `https://claude.ai/*` | 擴充功能只在 claude.ai 網頁聊天上運作：需要讀取頁面上的用量資訊、攔截使用者在額度已滿時的送出動作、並在重置後把文字填回輸入框。不會存取或執行於任何其他網域。 |
 
+### 給審核人員的備註：程式碼裡的 GitHub 請求
+
+程式碼裡有一段新版本檢查（`checkForUpdate`），會讀取 `https://raw.githubusercontent.com/ivantw829/claude-queue/main/manifest.json` 的版本號。它只在 `chrome.management.getSelf()` 回報 `installType === 'development'`（從原始碼載入）時執行，**商店安裝的版本不會發出這個請求**。它只讀取 JSON 裡的版本字串，不執行任何下載的內容，也不送出任何資料。審核若詢問，可貼：
+
+> The code contains a version check that reads the version string from the public manifest.json on GitHub. It only runs for unpacked (developer mode) installs, as detected by chrome.management.getSelf().installType === 'development', so the Web Store build never makes this request. No code is downloaded or executed and no user data is sent.
+
 ## 7. 資料使用揭露（Data usage / "Are you using any of the following..." 表單）
 
 CWS 的隱私權頁籤會問是否收集以下類別資料。因為本擴充功能**完全在本機運作、不傳送任何資料出裝置**，以下項目應全部勾選「否／不適用」：

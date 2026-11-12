@@ -31,7 +31,9 @@ Claude Queue 是一個非官方的社群 Chrome 擴充功能，用於 claude.ai 
 
 ### 資料如何被使用、是否會離開你的裝置
 
-- 唯一發出的網路請求，是向 `claude.ai` 自身查詢用量的 **同源 GET 請求**（使用你既有的登入狀態），不會呼叫任何第三方 API 或分析服務。
+- 擴充功能發出的網路請求只有兩種，都不會呼叫分析服務、不會送出你的任何資料：
+  1. 向 `claude.ai` 自身查詢用量的 **同源 GET 請求**（使用你既有的登入狀態）。
+  2. **新版本檢查**：只有從 GitHub 原始碼安裝（開發人員模式）時，每天一次讀取 GitHub 上公開的 `manifest.json`（`raw.githubusercontent.com`）比較版本號。這是不帶任何參數、不帶 cookie 的 GET 請求；GitHub 只會看到一般網路請求都有的 IP 位址與瀏覽器資訊。可在設定頁「更新」關閉；從 Chrome 線上應用程式商店安裝時完全不會發出這個請求。
 - 擴充功能只會在你按下「送出」、且系統判斷「用量已達上限」時，才讀取輸入框的文字內容，用途僅限於存入佇列。
 - 為了判斷訊息是否已成功送出、避免重複送出，擴充功能會在本機比對目前對話中**你自己最近幾則訊息**的文字；這項比對只在本機進行，結果不會被保存成可識別的紀錄，也不會傳送到任何地方。
 - 所有資料都留在 `chrome.storage.local` 與擴充功能自己的 IndexedDB，不會同步到 Google 帳號、不會上傳到任何伺服器、不會賣給或分享給第三方、不會用於廣告或與本擴充功能無關的目的。
@@ -81,7 +83,9 @@ The extension stores the following, locally on your own browser device, using Ch
 
 ### How data is used, and whether it ever leaves your device
 
-- The only network request the extension makes is a **same-origin GET request to claude.ai itself**, to read your usage (using your existing login session). It never calls any third-party API or analytics service.
+- The extension makes only two kinds of network requests. Neither calls an analytics service, and neither sends any of your data:
+  1. A **same-origin GET request to claude.ai itself**, to read your usage (using your existing login session).
+  2. **New-version check**: only when installed from the GitHub source (developer mode), once a day it reads the public `manifest.json` on GitHub (`raw.githubusercontent.com`) to compare version numbers. It is a GET request with no parameters and no cookies; GitHub only sees what any web request carries (IP address and browser information). It can be turned off under "Update" in settings, and it is never made when installed from the Chrome Web Store.
 - The extension only reads the text in the composer when you press send and the system determines your usage limit has been reached — solely to store it in the queue.
 - To confirm a message was actually sent and to avoid duplicate sends, the extension compares the text of **your own most recent messages** in the current conversation, locally on your device. This comparison happens only on-device; the result is not kept as an identifiable record and is never transmitted anywhere.
 - All data stays in `chrome.storage.local` and the extension's own IndexedDB: it is never synced to your Google account, never uploaded to any server, never sold or shared with third parties, and never used for advertising or any purpose unrelated to the extension's function.

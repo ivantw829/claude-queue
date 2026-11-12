@@ -11,6 +11,7 @@ importScripts(
   '/src/shared/logger.js',
   '/src/shared/text.js',
   '/src/shared/session.js',
+  '/src/shared/version.js',
   '/src/background/filestore.js'
 );
 
@@ -21,6 +22,7 @@ const NOTIFY_READY = 'cq-ready';
 const NOTIFY_FAILED = 'cq-check-failed';
 const NOTIFY_AUTO_FAILED_PREFIX = 'cq-auto-failed:';
 const NOTIFY_KEEPALIVE_FAILED = 'cq-keepalive-failed';
+const NOTIFY_UPDATE = 'cq-update';
 const NEW_CHAT_URL = 'https://claude.ai/new';
 // 自動重設連續失敗幾次後暫停（直到看到工作階段重新開始，或重新開啟設定）
 const KEEPALIVE_MAX_FAILS = 3;
@@ -291,6 +293,7 @@ chrome.notifications.onClicked.addListener(async (id) => {
     const st = await getKeepaliveState();
     await focusOrOpen(st.conversationUrl || NEW_CHAT_URL);
   }
+  else if (id === NOTIFY_UPDATE) await chrome.tabs.create({ url: CQ.version.UPDATE_GUIDE_URL });
   else if (id.startsWith(NOTIFY_AUTO_FAILED_PREFIX)) {
     const itemId = id.slice(NOTIFY_AUTO_FAILED_PREFIX.length);
     const it = (await getQueue()).find((i) => i.id === itemId);
@@ -721,6 +724,132 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   });
 });
 
+// ─────────────────────────── 新版本檢查 ───────────────────────────
+//
+// 從 GitHub 下載、用「載入未封裝項目」安裝時，Chrome 不會自動更新。
+// 每天讀一次 GitHub main 上的 manifest.json 比較版本號：只是一個不帶參數的 GET，不送出任何資料。
+// 從商店安裝（installType 不是 development）時不檢查，商店會自己更新。
+
+const UPDATE_FETCH_TIMEOUT_MS = 15 * 1000;
+
+function currentVersion() {
+  return chrome.runtime.getManifest().version;
+}
+
+let updChain = Promise.resolve();
+async function getUpdateState() {
+  return {
+    latest: null,
+    checkedAt: 0,
+    error: null,
+    notifiedVersion: null,
+    dismissedVersion: null,
+    updatedFrom: null,
+    ...((await getVal(K.UPDATE, null)) || {})
+  };
+}
+function setUpdateState(patch) {
+  const p = updChain.then(async () => {
+    const next = { ...(await getUpdateState()), ...patch };
+    await chrome.storage.local.set({ [K.UPDATE]: next });
+    return next;
+  });
+  updChain = p.catch(() => {});
+  return p;
+}
+
+/** 只有從原始碼載入（開發人員模式）才檢查；chrome.management.getSelf 不需要額外權限 */
+async function isDevInstall() {
+  try {
+    const self = await chrome.management.getSelf();
+    return !!self && self.installType === 'development';
+  } catch (_) {
+    return false;
+  }
+}
+
+async function fetchLatestVersion() {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), UPDATE_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(CQ.version.MANIFEST_URL, { credentials: 'omit', cache: 'no-store', signal: ctrl.signal });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    const v = data && typeof data.version === 'string' ? data.version.trim() : '';
+    if (!CQ.version.isValid(v)) throw new Error('bad version');
+    return v;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * 同一時間只跑一次（SW 啟動時 reconcile 可能被觸發兩次，避免重複連線）。
+ * @returns {Promise<'disabled'|'not-dev'|'error'|'newer'|'up-to-date'>}
+ */
+let updateInFlight = null;
+function checkForUpdate(why) {
+  if (!updateInFlight) updateInFlight = runUpdateCheck(why).finally(() => (updateInFlight = null));
+  return updateInFlight;
+}
+
+async function runUpdateCheck(why) {
+  const settings = await CQ.settings.load();
+  if (!settings.updateCheck) return 'disabled';
+  if (!(await isDevInstall())) return 'not-dev';
+  const now = Date.now();
+  let latest;
+  try {
+    latest = await fetchLatestVersion();
+  } catch (e) {
+    const error = String((e && e.name === 'AbortError' ? 'timeout' : e && e.message) || e).slice(0, 100);
+    await setUpdateState({ checkedAt: now, error });
+    log.warn('update check failed', { why, error });
+    return 'error';
+  }
+  const current = currentVersion();
+  const newer = CQ.version.compare(latest, current) > 0;
+  const st = await setUpdateState({ latest, checkedAt: now, error: null });
+  log.info('update check', { why, current, latest, newer });
+  if (newer && st.notifiedVersion !== latest) {
+    // 每個新版本只發一次通知；popup 會一直顯示提示，直到更新或按 ×
+    await setUpdateState({ notifiedVersion: latest });
+    await notify(NOTIFY_UPDATE, t('notifyUpdateTitle'), t('notifyUpdateBody', { version: latest, current }));
+  }
+  return newer ? 'newer' : 'up-to-date';
+}
+
+/** 排每天一次的檢查；距離上次檢查超過一天就馬上查一次 */
+async function scheduleUpdateCheck(why = 'startup') {
+  const settings = await CQ.settings.load();
+  if (!settings.updateCheck || !(await isDevInstall())) {
+    await chrome.alarms.clear(ALARMS.UPDATE_CHECK);
+    return;
+  }
+  const periodInMinutes = CQ.version.CHECK_INTERVAL_MS / 60000;
+  const existing = await chrome.alarms.get(ALARMS.UPDATE_CHECK);
+  if (!existing) await chrome.alarms.create(ALARMS.UPDATE_CHECK, { delayInMinutes: periodInMinutes, periodInMinutes });
+  const st = await getUpdateState();
+  if (Date.now() - st.checkedAt >= CQ.version.CHECK_INTERVAL_MS) await checkForUpdate(why);
+}
+
+/** 第一次安裝 → 開啟使用教學；更新 → 記下舊版本，popup 顯示「已更新到 vX」 */
+async function handleInstalled(details) {
+  const reason = details && details.reason;
+  if (reason === 'install') {
+    await chrome.tabs.create({ url: CQ.version.GUIDE_URL });
+    log.info('installed, guide opened');
+  } else if (reason === 'update') {
+    const from = details.previousVersion;
+    const to = currentVersion();
+    // 開發人員模式按「重新載入」也是 update，但版本沒變 → 不提示
+    if (from && CQ.version.compare(to, from) > 0) {
+      await setUpdateState({ updatedFrom: from });
+      log.info('updated', { from, to });
+    }
+  }
+}
+
 // ─────────────────────────── reconcile（啟動時重建） ───────────────────────────
 
 async function reconcile() {
@@ -765,15 +894,21 @@ async function reconcile() {
   });
   await scheduleResetAlarm();
   await scheduleKeepaliveAlarm(await getVal(K.USAGE, null));
+  scheduleUpdateCheck().catch((e) => log.error('update check scheduling failed', e));
 }
 
-chrome.runtime.onInstalled.addListener(() => reconcile());
+chrome.runtime.onInstalled.addListener((details) => {
+  handleInstalled(details).catch((e) => log.error('install handling failed', e));
+  reconcile();
+});
 chrome.runtime.onStartup.addListener(() => reconcile()); // 瀏覽器重啟後 alarms 可能遺失 → 依佇列重建
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARMS.RESET_CHECK) {
     handleResetCheck().catch((e) => log.error('reset check failed', e));
   } else if (alarm.name === ALARMS.KEEPALIVE) {
     handleKeepaliveAlarm().catch((e) => log.error('keepalive alarm failed', e));
+  } else if (alarm.name === ALARMS.UPDATE_CHECK) {
+    checkForUpdate('alarm').catch((e) => log.error('update check failed', e));
   }
 });
 
@@ -781,6 +916,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   const ch = area === 'local' && changes[K.SETTINGS];
   if (!ch) return;
+  // 設定頁開關「自動檢查新版本」：打開時馬上查一次
+  const updBefore = !ch.oldValue || ch.oldValue.updateCheck !== false;
+  const updAfter = !ch.newValue || ch.newValue.updateCheck !== false;
+  if (updBefore !== updAfter) {
+    (updAfter ? checkForUpdate('enabled').then(() => scheduleUpdateCheck('enabled')) : scheduleUpdateCheck()).catch((e) =>
+      log.error('update toggle failed', e)
+    );
+  }
   const before = !!(ch.oldValue && ch.oldValue.autoReset);
   const after = !!(ch.newValue && ch.newValue.autoReset);
   if (before === after) return;
@@ -1198,6 +1341,18 @@ const handlers = {
     await chrome.alarms.clearAll();
     updateBadge([]);
     await CQ.settings.load();
+    await scheduleUpdateCheck('cleared').catch(() => {});
+    return { ok: true };
+  },
+
+  /** popup 關掉提示：newer＝這個新版本不再提示；updated＝清掉「已更新到 vX」 */
+  async [MSG.UPDATE_DISMISS]({ kind }) {
+    if (kind === 'newer') {
+      const st = await getUpdateState();
+      if (st.latest) await setUpdateState({ dismissedVersion: st.latest });
+    } else if (kind === 'updated') {
+      await setUpdateState({ updatedFrom: null });
+    }
     return { ok: true };
   },
 
