@@ -317,3 +317,63 @@ test('three failures pause; seeing an active session resumes', async () => {
   await env.pushSnapshot(env.snap({ five_hour: { utilization: 5, resets_at: iso(env.clock.now + H) }, seven_day: weekly(env.clock.now) }));
   assert.equal(env.store.keepalive.failCount, 0);
 });
+
+// ─────────────── 用設定頁的「模擬用量已滿」測試自動重設 ───────────────
+
+test('simulate: session ends → sends; simulating again right after → sends again', async () => {
+  const env = createEnv();
+  await env.ready;
+  const simulate = async (minutes) => {
+    const s = env.ctx.CQ.settings.get();
+    await env.chrome.storage.local.set({
+      settings: { ...s, debugSimulate: true, debugSimulateMinutes: minutes, debugSimulateUntil: env.clock.now + minutes * MIN }
+    });
+    await env.settle();
+  };
+  const sim = () => env.ctx.CQ.usage.simulatedStatus(env.clock.now);
+  const sendIt = async () => {
+    const it = env.keepaliveItems()[0];
+    const claim = await env.send({ type: env.MSG.QUEUE_CLAIM, id: it.id });
+    await env.send({ type: env.MSG.QUEUE_MARK_SENT, id: it.id, token: claim.token, confidence: 'strong' });
+    await env.settle();
+  };
+
+  // 第一次：模擬 2 分鐘 → 進行中，alarm 在結束後 90 秒
+  await simulate(2);
+  await env.pushSnapshot(sim());
+  assert.equal(env.store.keepalive.lastCheck.result, 'session-active');
+  assert.equal(env.alarms['cq-keepalive'].scheduledTime, env.clock.now + 2 * MIN + 90 * 1000);
+  env.clock.now += 3 * MIN;
+  await env.pushSnapshot(sim());
+  assert.equal(env.keepaliveItems().length, 1, 'simulated session over → auto reset fires');
+  await sendIt();
+
+  // 送出後模擬仍顯示 0% → 不會一直重送
+  env.clock.now += 1 * MIN;
+  await env.pushSnapshot(sim());
+  assert.equal(env.keepaliveItems().length, 0);
+  assert.equal(env.store.keepalive.lastCheck.result, 'recently-sent');
+
+  // 第二次：重新模擬，不用等 5 小時（冷卻 10 分鐘還是有效）
+  env.clock.now += 10 * MIN;
+  await simulate(2);
+  await env.pushSnapshot(sim());
+  assert.equal(env.store.keepalive.lastCheck.result, 'session-active');
+  env.clock.now += 3 * MIN;
+  await env.pushSnapshot(sim());
+  assert.equal(env.keepaliveItems().length, 1, 'second simulated session over → fires again');
+});
+
+test('real API: a past resets_at from before the last send does not cancel the 5h guard', async () => {
+  const env = createEnv();
+  await env.ready;
+  await env.pushSnapshot(env.snap({ five_hour: null, seven_day: weekly(T0) }));
+  const it = env.keepaliveItems()[0];
+  const claim = await env.send({ type: env.MSG.QUEUE_CLAIM, id: it.id });
+  await env.send({ type: env.MSG.QUEUE_MARK_SENT, id: it.id, token: claim.token, confidence: 'strong' });
+  env.clock.now += 30 * MIN;
+  // API 還停在上一個工作階段（比這次送出早結束）
+  await env.pushSnapshot(env.snap({ five_hour: { utilization: 100, resets_at: iso(T0 - 10 * MIN) }, seven_day: weekly(env.clock.now) }));
+  assert.equal(env.keepaliveItems().length, 0);
+  assert.equal(env.store.keepalive.lastCheck.result, 'recently-sent');
+});
