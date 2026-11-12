@@ -41,6 +41,7 @@
         "src/shared/settings.js",
         "src/shared/logger.js",
         "src/shared/text.js",
+        "src/shared/session.js",
         "src/content/selectors.js",
         "src/content/usage.js",
         "src/content/editor.js",

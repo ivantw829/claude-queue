@@ -68,6 +68,7 @@
 <script src="/src/shared/settings.js"></script>
 <script src="/src/shared/logger.js"></script>
 <script src="/src/shared/text.js"></script>
+<script src="/src/shared/session.js"></script>
 <script src="/src/content/selectors.js"></script>
 <script src="/src/content/usage.js"></script>
 <script src="/src/content/editor.js"></script>
@@ -235,6 +236,45 @@
       const b = CQ.restore.start(item(), 'auto');
       await waitIdle();
       return { pass: a === true && b === false && __calls.filter((c) => c.type === 'queue:markSent').length === 1, types: types() };
+    },
+    // ── 自動重設 ──
+    async keepaliveSendsDespiteStaleBanner() {
+      // 睡前碰到上限，頁面殘留舊的上限提示；API 顯示工作階段已結束（five_hour: null）
+      await reset('/chat/aaa', { banner: true });
+      window.__api = { session: null, weekly: { pct: 30, resetsAt: Date.now() + 50 * 3600e3 }, extras: [] };
+      CQ.restore.start(item({ text: 'Hello World!', keepalive: true }), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      return { pass: lastMsg() === 'Hello World!' && !!call('queue:markSent') && !call('restore:retry'), types: types() };
+    },
+    async keepaliveIgnoresDuplicateInDedicatedChat() {
+      await reset('/chat/aaa');
+      const prev = document.createElement('div');
+      prev.dataset.testid = 'user-message';
+      prev.textContent = 'Hello World!';
+      msgs.appendChild(prev);
+      window.__api = { session: { pct: 0, resetsAt: null }, weekly: { pct: 30 }, extras: [] };
+      CQ.restore.start(item({ text: 'Hello World!', keepalive: true }), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      return { pass: msgs.children.length === 2 && !!call('queue:markSent') && !call('restore:giveUp'), types: types() };
+    },
+    async keepaliveSkipsWhenSessionActive() {
+      await reset('/chat/aaa');
+      window.__api = { session: { pct: 5, resetsAt: Date.now() + 4 * 3600e3 }, weekly: { pct: 30 }, extras: [] };
+      CQ.restore.start(item({ text: 'Hello World!', keepalive: true }), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      return { pass: lastMsg() === null && !!call('queue:delete') && !call('queue:claim'), types: types() };
+    },
+    async keepaliveNewChatBindsUrl() {
+      await reset('/new');
+      window.__api = { session: null, weekly: { pct: 30 }, extras: [] };
+      CQ.restore.start(item({ text: 'Hello World!', keepalive: true, url: origin + '/new' }), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      const b = call('keepalive:bound');
+      return { pass: lastMsg() === 'Hello World!' && b && /\/chat\/new123$/.test(b.url), types: types() };
     }
   };
 

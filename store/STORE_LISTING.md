@@ -19,6 +19,8 @@
 >
 > (EN) Saves the message you tried to send when claude.ai's usage limit is reached, and helps you send it once your quota resets.
 
+> ⚠ 2026-11 新增的「自動重設」功能超出上面這句話的範圍（它會在沒有排隊訊息時也自動送出訊息）。送審前要決定：在單一用途說明補上「並可選擇在工作階段結束時自動開始下一個工作階段」，或是在商店版本移除這個功能。審核可能會把它視為第二個用途。
+
 ## 3. 簡短描述（Short description，上限 132 字元）
 
 **繁體中文**（目前 `_locales/zh_TW/messages.json` 的 `extDescription`，可直接沿用）：
@@ -47,6 +49,7 @@ Claude Queue 解決一個 claude.ai 重度使用者都遇過的麻煩：訊息�
 2. 額度重置後，發出桌面通知。
 3. 點通知會開啟原本的對話、自動把文字填回輸入框，並顯示確認列：你可以按「送出」、「取消」（放回輸入框、不排隊），或「保留在佇列」。
 4. 也可以在設定頁開啟「重置後自動送出」（預設關閉，開啟前會有明顯警告），不需要手動確認。
+5. 選用的「自動重設」（預設關閉）：5 小時工作階段歸零時，自動在一個專用對話送出一則短訊息，讓下一個工作階段馬上開始倒數。
 
 【特色】
 - 完全在本機運作：沒有外部伺服器，不上傳任何資料，不載入遠端程式碼
@@ -91,6 +94,7 @@ HOW IT WORKS
 2. Once your quota resets, you get a desktop notification.
 3. Clicking the notification opens the original conversation, fills your text back into the composer, and shows a confirmation bar: Send, Cancel (puts the text back in the composer, removes it from the queue), or Keep in queue.
 4. Optionally, enable "auto-send after reset" in settings (off by default, with a clear warning) to skip manual confirmation.
+5. Optional "auto reset" (off by default): when your 5-hour session ends, it sends a short message in a dedicated conversation so the next session starts counting down right away.
 
 FEATURES
 - Fully local: no external server, no data upload, no remote code loading

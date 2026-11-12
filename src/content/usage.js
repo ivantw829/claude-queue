@@ -316,7 +316,9 @@
     if (api) {
       for (const key of ['session', 'weekly']) {
         const b = api[key];
-        if (b && b.pct != null && b.pct >= FULL_THRESHOLD) {
+        // 已滿但重置時間已經過了（工作階段結束後 API 可能還停在 100%）→ 不算擋住
+        const expired = b && b.resetsAt && b.resetsAt <= now;
+        if (b && b.pct != null && b.pct >= FULL_THRESHOLD && !expired) {
           reasons.push(key);
           if (b.resetsAt) resetCandidates.push(b.resetsAt);
         }

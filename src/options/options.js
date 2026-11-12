@@ -22,6 +22,8 @@
   function render(s) {
     $('autoSend').checked = s.autoSend;
     $('notifications').checked = s.notifications;
+    $('autoReset').checked = s.autoReset;
+    if (document.activeElement !== $('autoResetText')) $('autoResetText').value = s.autoResetText;
     $('pollMinutes').value = s.pollMinutes;
     $('debugLog').checked = s.debugLog;
     $('debugSimulate').checked = s.debugSimulate;
@@ -55,6 +57,14 @@
     }
     save({ autoSend: e.target.checked });
   });
+  $('autoReset').addEventListener('change', (e) => {
+    if (e.target.checked && !confirm(t('optAutoResetConfirm'))) {
+      e.target.checked = false;
+      return;
+    }
+    save({ autoReset: e.target.checked });
+  });
+  $('autoResetText').addEventListener('change', (e) => save({ autoResetText: e.target.value }));
   $('notifications').addEventListener('change', (e) => save({ notifications: e.target.checked }));
   $('pollMinutes').addEventListener('change', (e) => save({ pollMinutes: Number(e.target.value) }));
   $('debugLog').addEventListener('change', (e) => save({ debugLog: e.target.checked }));
@@ -73,6 +83,42 @@
       debugSimulateMinutes: minutes,
       debugSimulateUntil: s.debugSimulate ? Date.now() + minutes * 60000 : 0
     });
+  });
+
+  // ───────────── 自動重設：最後一次檢查（不需開 debug log） ─────────────
+
+  const CHECK_RESULT_KEYS = {
+    triggered: 'kaResultTriggered',
+    'session-active': 'kaResultSessionActive',
+    'recently-sent': 'kaResultRecentlySent',
+    'weekly-full': 'kaResultWeeklyFull',
+    'no-usage-data': 'kaResultNoUsageData',
+    cooldown: 'kaResultCooldown',
+    paused: 'kaResultPaused',
+    'queue-busy': 'kaResultQueueBusy',
+    'already-queued': 'kaResultAlreadyQueued',
+    disabled: 'kaResultDisabled'
+  };
+
+  function renderKeepaliveCheck(st) {
+    const el = $('keepaliveLastCheck');
+    const c = st && st.lastCheck;
+    if (!c) {
+      el.textContent = t('kaLastCheckNone');
+      return;
+    }
+    let text = t('kaLastCheck', {
+      time: new Date(c.at).toLocaleString(),
+      result: t(CHECK_RESULT_KEYS[c.result] || 'kaResultUnknown', { result: c.result })
+    });
+    if (c.endAt) text += ' · ' + t('kaSessionEnd', { time: CQ.i18n.formatClock(c.endAt) });
+    if (st.lastSentAt) text += ' · ' + t('kaLastSent', { time: new Date(st.lastSentAt).toLocaleString() });
+    el.textContent = text;
+  }
+
+  chrome.storage.local.get(K.KEEPALIVE).then((d) => renderKeepaliveCheck(d[K.KEEPALIVE]));
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[K.KEEPALIVE]) renderKeepaliveCheck(changes[K.KEEPALIVE].newValue);
   });
 
   // ───────────── logs ─────────────

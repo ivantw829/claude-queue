@@ -128,7 +128,7 @@
     const tpl = document.getElementById('itemTpl');
     const active = queue.filter((i) => i.status !== STATUS.SENT);
     const countable = active.filter((i) => !i.keepalive);
-    document.getElementById('queueCount').textContent = active.length ? `(${active.length})` : '';
+    document.getElementById('queueCount').textContent = countable.length ? `(${countable.length})` : '';
     document.getElementById('queueEmpty').hidden = active.length > 0;
 
     // 保留正在編輯的 textarea 內容
@@ -239,9 +239,38 @@
     });
   }
 
+  // ───────────── 自動重設 ─────────────
+
+  function renderKeepalive() {
+    const el = document.getElementById('keepaliveStatus');
+    if (!autoReset) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const st = keepalive || {};
+    const now = Date.now();
+    let text;
+    const c = CQ.session.keepaliveCheck(usage, st, now);
+    if ((st.failCount || 0) >= 3) {
+      text = t('popupKeepalivePaused');
+    } else if (c.endAt && (c.result === 'session-active' || c.result === 'recently-sent')) {
+      text = t('popupKeepaliveNext', { time: formatClock(c.endAt + CQ.TIMING.KEEPALIVE_BUFFER_MS) });
+    } else if (c.result === 'weekly-full') {
+      text = t('popupKeepaliveWeeklyFull', { time: c.endAt ? formatClock(c.endAt) : '?' });
+    } else if (c.result === 'no-usage-data') {
+      text = t('popupKeepaliveNoData');
+    } else {
+      text = t('popupKeepaliveIdle');
+    }
+    if (st.lastError) text += ' · ' + t('popupKeepaliveLastError', { reason: errorText(st.lastError) });
+    el.textContent = text;
+  }
+
   // 每秒只更新倒數文字，不整個重繪（避免打斷編輯）
   function tick() {
     renderUsage();
+    renderKeepalive();
     document.querySelectorAll('.item .meta').forEach((meta) => {
       const resetAt = Number(meta.dataset.resetAt);
       if (!resetAt) return;
@@ -267,11 +296,14 @@
   async function init() {
     // 顯示目前載入的版本，方便確認更新是否已生效
     document.getElementById('version').textContent = 'v' + chrome.runtime.getManifest().version;
-    const data = await chrome.storage.local.get([K.QUEUE, K.USAGE]);
+    const data = await chrome.storage.local.get([K.QUEUE, K.USAGE, K.KEEPALIVE]);
     queue = data[K.QUEUE] || [];
     usage = data[K.USAGE] || null;
+    keepalive = data[K.KEEPALIVE] || null;
     const settings = await CQ.settings.load();
+    autoReset = settings.autoReset;
     document.getElementById('autoSendWarning').hidden = !settings.autoSend;
+    renderKeepalive();
     renderUsage();
     renderQueue();
     setInterval(tick, 1000);
@@ -287,7 +319,14 @@
         renderUsage();
       }
       if (changes[K.SETTINGS]) {
-        document.getElementById('autoSendWarning').hidden = !(changes[K.SETTINGS].newValue || {}).autoSend;
+        const ns = changes[K.SETTINGS].newValue || {};
+        document.getElementById('autoSendWarning').hidden = !ns.autoSend;
+        autoReset = !!ns.autoReset;
+        renderKeepalive();
+      }
+      if (changes[K.KEEPALIVE]) {
+        keepalive = changes[K.KEEPALIVE].newValue || null;
+        renderKeepalive();
       }
     });
 
