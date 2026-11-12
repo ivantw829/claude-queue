@@ -79,7 +79,16 @@
     return s.length > n ? s.slice(0, n) + '…' : s;
   }
 
+  /** 檔案大小：1.2 MB / 340 KB / 12 B */
+  function formatBytes(n) {
+    const v = Number(n) || 0;
+    if (v >= 1024 * 1024) return (v / (1024 * 1024)).toFixed(v >= 10 * 1024 * 1024 ? 0 : 1) + ' MB';
+    if (v >= 1024) return Math.round(v / 1024) + ' KB';
+    return v + ' B';
+  }
+
   CQ.text = {
+    formatBytes,
     normalizeForCompare,
     sameText,
     textStartsMatch,

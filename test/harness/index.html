@@ -6,6 +6,8 @@
 <style>
   body { font: 14px system-ui; margin: 20px; }
   fieldset { border: 1px solid #ccc; padding: 8px; display: flex; gap: 8px; }
+  #atts { display: flex; gap: 4px; }
+  [data-testid="file-thumbnail"] { border: 1px solid #aaa; padding: 2px 4px; font-size: 12px; }
   .ProseMirror { flex: 1; min-height: 40px; border: 1px solid #999; padding: 4px; }
   #msgs div { background: #eef; margin: 4px 0; padding: 4px; white-space: pre-wrap; }
   #out { white-space: pre-wrap; font-family: monospace; margin-top: 16px; }
@@ -62,7 +64,8 @@
 <script src="/src/shared/constants.js"></script>
 <script>
   // 測試用：縮短等待時間（其他模組在載入時讀取 CQ.TIMING）
-  CQ.TIMING = Object.freeze({ ...CQ.TIMING, SEND_DETECT_TIMEOUT_MS: 3000, SEND_BUTTON_WAIT_MS: 1500, COMPOSER_WAIT_MS: 3000 });
+  CQ.TIMING = Object.freeze({ ...CQ.TIMING, SEND_DETECT_TIMEOUT_MS: 3000, SEND_BUTTON_WAIT_MS: 1500, COMPOSER_WAIT_MS: 3000,
+    ATTACH_APPEAR_WAIT_MS: 800, ATTACH_UPLOAD_WAIT_MS: 3000 });
 </script>
 <script src="/src/shared/i18n.js"></script>
 <script src="/src/shared/settings.js"></script>
@@ -72,6 +75,7 @@
 <script src="/src/content/selectors.js"></script>
 <script src="/src/content/usage.js"></script>
 <script src="/src/content/editor.js"></script>
+<script src="/src/content/attachments.js"></script>
 <script src="/src/content/ui.js"></script>
 <script src="/src/content/sender.js"></script>
 <script src="/src/content/interceptor.js"></script>
@@ -82,6 +86,8 @@
 <div id="msgs"></div>
 <div id="banner"></div>
 <fieldset>
+  <div id="atts"></div>
+  <input type="file" data-testid="file-upload" multiple hidden>
   <div class="ProseMirror" contenteditable="true"></div>
   <button aria-label="Send message" disabled>Send</button>
 </fieldset>
@@ -91,7 +97,37 @@
   const ed = document.querySelector('.ProseMirror');
   const btn = document.querySelector('button[aria-label="Send message"]');
   const msgs = document.getElementById('msgs');
-  window.fake = { mode: 'normal' }; // normal | stale | enterOnly | ignore | clearOnly | markdown
+  window.fake = { mode: 'normal', attachMode: 'normal', lastSentFiles: null };
+  // mode: normal | stale | enterOnly | ignore | clearOnly | markdown
+  // attachMode: normal（選檔後顯示卡片，上傳 400ms）| broken（不接受檔案）| stuck（一直上傳中）
+  const atts = document.getElementById('atts');
+  const fileInput = document.querySelector('input[type=file]');
+  function addCards(files) {
+    for (const f of files) {
+      const card = document.createElement('div');
+      // 和 2026-11 實測的 claude.ai 結構一致：上傳中 data-state="pending" aria-busy="true"，完成後移除
+      card.dataset.testid = 'file-thumbnail';
+      card.setAttribute('data-cds-attachment', '');
+      card.dataset.state = 'pending';
+      card.setAttribute('aria-busy', 'true');
+      card.innerHTML = '<span class="name"></span><button type="button" data-cds-attachment-remove>×</button>';
+      card.querySelector('.name').textContent = f.name;
+      const rm = card.querySelector('button');
+      rm.setAttribute('aria-label', '移除 ' + f.name);
+      rm.addEventListener('click', () => card.remove());
+      atts.appendChild(card);
+      if (fake.attachMode !== 'stuck') setTimeout(() => (delete card.dataset.state, card.removeAttribute('aria-busy')), 400);
+    }
+  }
+  fileInput.addEventListener('change', () => {
+    if (fake.attachMode === 'broken') return;
+    addCards(Array.from(fileInput.files));
+  });
+  window.userAddFiles = (files) => {
+    addCards(files);
+    // 正式環境由 isTrusted 的 change/drop/paste 事件記錄
+    CQ.attachments._record(files, 'test');
+  };
   const editorText = () => CQ.editor.getText(ed);
   const syncBtn = () => { btn.disabled = fake.mode === 'stale' || fake.mode === 'enterOnly' || !editorText(); };
   ed.addEventListener('input', syncBtn);
@@ -100,6 +136,8 @@
   function doSend() {
     const text = editorText();
     if (!text || fake.mode === 'ignore') return;
+    fake.lastSentFiles = Array.from(atts.children).map((c) => c.textContent.replace('×', ''));
+    atts.innerHTML = '';
     ed.innerHTML = '';
     syncBtn();
     if (fake.mode === 'clearOnly') return;
@@ -134,6 +172,11 @@
   async function reset(path, { mode = 'normal', draft = '', banner = false } = {}) {
     await waitIdle();
     fake.mode = mode;
+    fake.attachMode = 'normal';
+    fake.lastSentFiles = null;
+    atts.innerHTML = '';
+    window.__swReply = {};
+    window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
     msgs.innerHTML = '';
     ed.innerHTML = draft ? `<p>${draft}</p>` : '';
     syncBtn();
@@ -147,6 +190,15 @@
   const types = () => __calls.map((c) => c.type);
   const call = (type) => __calls.find((c) => c.type === type);
   const lastMsg = () => (msgs.lastElementChild ? msgs.lastElementChild.textContent : null);
+  const mkFile = (name, body = 'data:' + name) => new File([body], name, { type: name.endsWith('.png') ? 'image/png' : 'application/pdf' });
+  const fileItem = (names, over = {}) =>
+    item({ attachments: names.map((n, i) => ({ fileId: 'F' + i, name: n, type: 'image/png', size: 10 })), ...over });
+  function serveFiles(names) {
+    window.__swReply['file:get'] = (m) => {
+      const n = names[Number(m.fileId.slice(1))];
+      return n ? { ok: true, file: { name: n, type: 'image/png', size: 10, lastModified: 1, data: btoa('data:' + n) } } : { ok: false };
+    };
+  }
   const item = (over = {}) => ({ id: 'x' + Math.random().toString(36).slice(2, 7), text: 'hello world', url: origin + '/chat/aaa', ...over });
 
   const scenarios = {
@@ -275,6 +327,111 @@
       window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
       const b = call('keepalive:bound');
       return { pass: lastMsg() === 'Hello World!' && b && /\/chat\/new123$/.test(b.url), types: types() };
+    },
+    // ── 附件 ──
+    async collectMatchesTracked() {
+      await reset('/chat/aaa');
+      userAddFiles([mkFile('one.png'), mkFile('two.pdf')]);
+      const r = CQ.attachments.collect();
+      return { pass: r.ok && r.files.map((f) => f.name).join() === 'one.png,two.pdf', r };
+    },
+    async collectAfterUserRemovedOne() {
+      await reset('/chat/aaa');
+      userAddFiles([mkFile('one.png'), mkFile('two.pdf')]);
+      atts.firstElementChild.remove();
+      const r = CQ.attachments.collect();
+      return { pass: r.ok && r.files.map((f) => f.name).join() === 'two.pdf', r };
+    },
+    async collectRejectsUntrackedCard() {
+      await reset('/chat/aaa');
+      userAddFiles([mkFile('one.png')]);
+      addCards([{ name: 'from-drive.pdf' }]); // 例如 Google Drive 附件：頁面上有卡片，但沒有 File
+      const r = CQ.attachments.collect();
+      return { pass: !r.ok && r.reason === 'untracked', r };
+    },
+    async interceptQueuesTextWithFiles() {
+      await reset('/chat/aaa', { draft: 'see attached', banner: true });
+      window.__api = { session: { pct: 100, resetsAt: Date.now() + 3600e3 }, weekly: { pct: 10 }, extras: [] };
+      let n = 0;
+      window.__swReply['file:stage'] = () => ({ ok: true, id: 'S' + n++ });
+      userAddFiles([mkFile('one.png'), mkFile('two.pdf')]);
+      const ev = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+      CQ.interceptor._handleSendAttempt(ev, 'enter');
+      await sleep(1500);
+      const add = call('queue:add');
+      const stages = __calls.filter((c) => c.type === 'file:stage');
+      return {
+        pass:
+          ev.defaultPrevented &&
+          stages.length === 2 &&
+          stages[0].file.name === 'one.png' &&
+          stages[0].file.data === btoa('data:one.png') &&
+          add && add.item.attachments.join() === 'S0,S1' &&
+          editorText() === '' && atts.children.length === 0 && msgs.children.length === 0,
+        types: types()
+      };
+    },
+    async interceptNoQueueWhenStageFails() {
+      await reset('/chat/aaa', { draft: 'see attached', banner: true });
+      window.__api = { session: { pct: 100, resetsAt: Date.now() + 3600e3 }, weekly: { pct: 10 }, extras: [] };
+      window.__swReply['file:stage'] = () => ({ ok: false, error: 'storage-full' });
+      userAddFiles([mkFile('one.png')]);
+      CQ.interceptor._handleSendAttempt(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }), 'enter');
+      await sleep(1200);
+      return { pass: !call('queue:add') && editorText() === 'see attached' && atts.children.length === 1, types: types() };
+    },
+    async interceptLetsUntrackedThrough() {
+      await reset('/chat/aaa', { draft: 'see attached', banner: true });
+      addCards([{ name: 'from-drive.pdf' }]);
+      const ev = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+      CQ.interceptor._handleSendAttempt(ev, 'enter');
+      await sleep(300);
+      return { pass: !ev.defaultPrevented && !call('file:stage') && !call('queue:add'), types: types() };
+    },
+    async restoreAutoWithFiles() {
+      await reset('/chat/aaa');
+      serveFiles(['one.png', 'two.pdf']);
+      CQ.restore.start(fileItem(['one.png', 'two.pdf']), 'auto');
+      await waitIdle();
+      return {
+        pass: lastMsg() === 'hello world' && !!call('queue:markSent') && (fake.lastSentFiles || []).join() === 'one.png,two.pdf',
+        sent: fake.lastSentFiles,
+        types: types()
+      };
+    },
+    async restoreAutoAttachBroken() {
+      await reset('/chat/aaa');
+      fake.attachMode = 'broken';
+      serveFiles(['one.png']);
+      CQ.restore.start(fileItem(['one.png']), 'auto');
+      await waitIdle();
+      const r = call('restore:retry');
+      return { pass: lastMsg() === null && r && r.reason === 'attach-failed' && !call('queue:claim'), types: types() };
+    },
+    async restoreAutoUploadStuck() {
+      await reset('/chat/aaa');
+      fake.attachMode = 'stuck';
+      serveFiles(['one.png']);
+      CQ.restore.start(fileItem(['one.png']), 'auto');
+      await waitIdle();
+      const r = call('restore:retry');
+      return { pass: lastMsg() === null && r && r.reason === 'attach-failed' && !call('queue:claim'), types: types() };
+    },
+    async restoreAutoFilesMissing() {
+      await reset('/chat/aaa');
+      serveFiles([]);
+      CQ.restore.start(fileItem(['one.png']), 'auto');
+      await waitIdle();
+      const g = call('restore:giveUp');
+      return { pass: lastMsg() === null && g && g.reason === 'attachments-missing', types: types() };
+    },
+    async restoreAutoComposerHasAttachments() {
+      await reset('/chat/aaa');
+      addCards([{ name: 'mine.png' }]);
+      CQ.restore.start(item(), 'auto'); // 純文字項目也不能和你的附件一起送出
+      await waitIdle();
+      const g = call('restore:giveUp');
+      return { pass: lastMsg() === null && g && g.reason === 'composer-has-attachments' && !call('queue:add'), types: types() };
     }
   };
 

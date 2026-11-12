@@ -8,6 +8,9 @@
  *      - 其實已恢復 → 不排隊，提示你再按一次送出（文字仍在輸入框）
  *      - 仍然已滿 → 存入佇列，確認存檔成功後才清空輸入框
  *   3. 用量未滿 → 完全不干涉
+ *
+ * 附件：輸入區有附件時，用 CQ.attachments.collect() 取得你加入的檔案，連同文字一起排隊。
+ * 對不上（例如 Google Drive 附件）或超過大小限制 → 照原本行為放行並提示。沒有文字只有附件 → 不排隊。
  */
 (function (root) {
   const CQ = (root.CQ = root.CQ || {});
@@ -98,16 +101,28 @@
     }
     if (!text) return; // 沒有文字可保存，維持原本行為
 
+    let files = [];
     if (CQ.editor.hasAttachments()) {
-      log.info('attachment detected, not queueing', { via });
-      CQ.ui.toast(t('toastHasAttachment'), { kind: 'warn' });
-      return; // 放行原本行為
+      const got = CQ.attachments.collect();
+      // 看得到附件卻一張卡片都數不到（選擇器對不上）→ 也當作無法保存，不排一則少了附件的訊息
+      if (got.ok && !got.files.length) Object.assign(got, { ok: false, reason: 'untracked' });
+      if (!got.ok) {
+        log.info('attachments not queueable, letting through', { via, reason: got.reason });
+        CQ.ui.toast(t(ATTACH_REASON_TOAST[got.reason] || 'toastHasAttachment'), { kind: 'warn', duration: 8000 });
+        return; // 放行原本行為
+      }
+      files = got.files;
     }
 
     stop(e);
     handling = true;
-    log.info('send blocked (usage full)', { via, length: text.length, reasons: decision.reasons });
-    queueMessage(text, decision)
+    log.info('send blocked (usage full)', {
+      via,
+      length: text.length,
+      files: files.length,
+      reasons: decision.reasons
+    });
+    queueMessage(text, decision, files)
       .catch((err) => {
         log.error('queue message failed', err);
         CQ.ui.toast(t('toastSaveFailed'), { kind: 'error' });
@@ -117,7 +132,14 @@
       });
   }
 
-  async function queueMessage(text, decision) {
+  const ATTACH_REASON_TOAST = {
+    untracked: 'toastHasAttachment',
+    'too-large': 'toastAttachmentTooLarge',
+    'too-many': 'toastAttachmentTooMany'
+  };
+  const STAGE_ERROR_TOAST = { 'storage-full': 'toastAttachmentStorageFull' };
+
+  async function queueMessage(text, decision, files = []) {
     // 送出前再查一次
     const fresh = await CQ.usageState.refresh({ timeout: TIMING.PRE_SEND_RECHECK_TIMEOUT_MS });
     if (fresh && fresh.full === false) {
@@ -133,6 +155,21 @@
       estimated = true;
     }
 
+    // 附件先交給 SW 暫存（失敗就不排隊，輸入框與附件都保持原樣）
+    let stageIds = [];
+    if (files.length) {
+      const staged = await CQ.attachments.stageAll(files);
+      if (staged.error) {
+        log.warn('stage attachments failed', { error: staged.error });
+        CQ.ui.toast(t(STAGE_ERROR_TOAST[staged.error] || 'toastAttachmentSaveFailed'), {
+          kind: 'error',
+          duration: 8000
+        });
+        return;
+      }
+      stageIds = staged.ids;
+    }
+
     const res = await CQ.bg.send(MSG.QUEUE_ADD, {
       item: {
         text,
@@ -140,7 +177,8 @@
         resetAt,
         resetEstimated: !!estimated,
         reasons: d.reasons || [],
-        newChatGroup: currentNewChatGroup()
+        newChatGroup: currentNewChatGroup(),
+        attachments: stageIds
       }
     });
     if (!res || !res.ok || !res.item) {
@@ -155,10 +193,17 @@
     } else {
       CQ.ui.toast(t('toastEditorChangedNotCleared'), { kind: 'warn' });
     }
+    // 附件也移除（等待期間附件數被改過就不動）
+    if (files.length) {
+      const removed = CQ.attachments.count() === files.length && (await CQ.attachments.removeAll());
+      if (!removed) CQ.ui.toast(t('toastAttachmentsNotRemoved'), { kind: 'warn', duration: 8000 });
+    }
 
     const clock = CQ.i18n.formatClock(res.item.resetAt);
     CQ.ui.toast(
-      t('toastQueued', { time: clock }) + (res.item.resetEstimated ? t('estimatedSuffix') : ''),
+      (files.length
+        ? t('toastQueuedWithFiles', { time: clock, count: files.length })
+        : t('toastQueued', { time: clock })) + (res.item.resetEstimated ? t('estimatedSuffix') : ''),
       { kind: 'info', duration: 8000 }
     );
   }
@@ -195,5 +240,6 @@
     log.debug('interceptor installed');
   }
 
-  CQ.interceptor = { install, allowNextSend, decideSync, onNavigate };
+  // _handleSendAttempt：測試頁用（合成的鍵盤事件不是 isTrusted）
+  CQ.interceptor = { install, allowNextSend, decideSync, onNavigate, _handleSendAttempt: handleSendAttempt };
 })(globalThis);

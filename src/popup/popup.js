@@ -117,6 +117,9 @@
       'stale-limit': 'reasonStaleLimit',
       duplicate: 'reasonDuplicate',
       'new-chat-url-unknown': 'reasonNewChatUrl',
+      'attach-failed': 'reasonAttachFailed',
+      'attachments-missing': 'reasonAttachmentsMissing',
+      'composer-has-attachments': 'reasonComposerHasAttachments',
       'draft-save-failed': 'reasonGeneric',
       generic: 'reasonGeneric'
     };
@@ -153,6 +156,18 @@
       conv.title = item.url;
       li.querySelector('.time').textContent = formatClock(item.createdAt);
       li.querySelector('.text').textContent = item.text;
+
+      const atts = item.attachments || [];
+      if (atts.length) {
+        const files = li.querySelector('.files');
+        files.hidden = false;
+        files.textContent = t('popupFiles', {
+          count: atts.length,
+          size: CQ.text.formatBytes(atts.reduce((n, a) => n + (a.size || 0), 0)),
+          names: atts.map((a) => a.name).join('、')
+        });
+        files.title = files.textContent;
+      }
 
       const meta = li.querySelector('.meta');
       if (item.status === STATUS.WAITING) {

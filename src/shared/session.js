@@ -52,7 +52,11 @@
     const end = sessionEndAt(snap, now);
     if (end) return { idle: false, result: 'session-active', endAt: end };
     const len = (CQ.TIMING && CQ.TIMING.SESSION_LENGTH_MS) || 5 * 60 * 60 * 1000;
-    const est = state.lastSentAt ? state.lastSentAt + len : 0;
+    // API 回報的工作階段在上次送出「之後」才結束 → 那次送出開始的工作階段已經結束，不用再估計
+    // （例如模擬用量時：模擬的工作階段比上次送出晚結束，可以馬上再測一次）
+    const endedAt = snap.session ? Number(snap.session.resetsAt) || 0 : 0;
+    const superseded = state.lastSentAt && endedAt > state.lastSentAt;
+    const est = state.lastSentAt && !superseded ? state.lastSentAt + len : 0;
     if (est > now) return { idle: false, result: 'recently-sent', endAt: est };
     return { idle: true, result: 'idle', endAt: null };
   }

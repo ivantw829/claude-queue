@@ -10,7 +10,8 @@ importScripts(
   '/src/shared/settings.js',
   '/src/shared/logger.js',
   '/src/shared/text.js',
-  '/src/shared/session.js'
+  '/src/shared/session.js',
+  '/src/background/filestore.js'
 );
 
 const { STORAGE_KEYS: K, STATUS, ALARMS, TIMING, LIMITS, MSG } = CQ;
@@ -39,7 +40,10 @@ const FAIL_REASON_KEYS = {
   'editor-missing': 'reasonEditor',
   'stale-limit': 'reasonStaleLimit',
   duplicate: 'reasonDuplicate',
-  'new-chat-url-unknown': 'reasonNewChatUrl'
+  'new-chat-url-unknown': 'reasonNewChatUrl',
+  'attach-failed': 'reasonAttachFailed',
+  'attachments-missing': 'reasonAttachmentsMissing',
+  'composer-has-attachments': 'reasonComposerHasAttachments'
 };
 
 // ─────────────────────────── mutex ───────────────────────────
@@ -81,7 +85,21 @@ async function saveQueue(queue) {
   queue.sort((a, b) => a.createdAt - b.createdAt);
   await chrome.storage.local.set({ [K.QUEUE]: queue });
   updateBadge(queue);
+  await gcFiles(queue);
   return queue;
+}
+
+/**
+ * 刪除已不在佇列中的項目的附件（送出、刪除、取消、失敗移除都會經過 saveQueue，在這裡集中處理）。
+ * 檔案清理失敗不影響佇列本身。
+ */
+async function gcFiles(queue) {
+  try {
+    const n = await CQ.fileStore.gc(queue.map((i) => i.id));
+    if (n) log.info('attachments removed', { count: n });
+  } catch (e) {
+    log.warn('attachment gc failed', { error: e.message });
+  }
 }
 
 async function getVal(key, fallback) {
@@ -735,7 +753,10 @@ async function reconcile() {
     const kept = q.filter((i) => i.status !== STATUS.SENT && !(i.keepalive && i.status === STATUS.FAILED));
     if (kept.length !== q.length) changed = true;
     if (changed) await saveQueue(kept);
-    else updateBadge(q);
+    else {
+      updateBadge(q);
+      await gcFiles(q); // 清掉逾時的暫存附件
+    }
 
     const pending = await getVal(K.PENDING_RESTORE, null);
     if (pending && now - pending.at > TIMING.PENDING_RESTORE_TTL_MS) {
@@ -786,12 +807,21 @@ const handlers = {
       draft: !!item.draft,
       // 新對話群組：同一次在新對話頁排的多則，之後要依序送進同一個新對話
       newChatGroup: typeof item.newChatGroup === 'string' ? item.newChatGroup.slice(0, 64) : null,
+      attachments: [],
       status: item.draft ? STATUS.READY : STATUS.WAITING,
       attempts: 0,
       lastError: null,
       claim: null
     };
+    const stageIds = Array.isArray(item.attachments) ? item.attachments.filter((x) => typeof x === 'string') : [];
+    if (stageIds.length > LIMITS.MAX_FILES_PER_ITEM) return { ok: false, error: 'too many attachments' };
     const saved = await locked(async () => {
+      if (stageIds.length) {
+        // 先把暫存的附件指向這個項目；任何一個不見了就整則不排隊（輸入框不會被清空）
+        const linked = await CQ.fileStore.link(stageIds, newItem.id);
+        if (!linked) return 'attachment-missing';
+        newItem.attachments = linked;
+      }
       const q = await getQueue();
       q.push(newItem);
       await saveQueue(q);
@@ -799,16 +829,52 @@ const handlers = {
       const verify = await getQueue();
       return verify.some((i) => i.id === newItem.id && i.text === text);
     });
+    if (saved === 'attachment-missing') return { ok: false, error: 'attachment-missing' };
     if (!saved) return { ok: false, error: 'storage verify failed' };
     log.info('queued', {
       id: newItem.id,
       length: text.length,
+      files: newItem.attachments.length,
+      bytes: newItem.attachments.reduce((n, a) => n + a.size, 0),
       resetAt: newItem.resetAt,
       draft: newItem.draft,
       group: !!newItem.newChatGroup
     });
     await scheduleResetAlarm();
     return { ok: true, item: newItem };
+  },
+
+  // 附件暫存：每次一個檔案（訊息大小有上限，不一次全部送）
+  async [MSG.FILE_STAGE]({ file }) {
+    const meta = file && typeof file === 'object' ? file : {};
+    const data = typeof meta.data === 'string' ? meta.data : '';
+    const size = Number(meta.size) || 0;
+    if (!data) return { ok: false, error: 'empty' };
+    if (size > LIMITS.MAX_FILE_BYTES || data.length > Math.ceil(LIMITS.MAX_FILE_BYTES / 3) * 4 + 4) {
+      return { ok: false, error: 'file-too-large' };
+    }
+    return locked(async () => {
+      if ((await CQ.fileStore.totalSize()) + size > LIMITS.MAX_TOTAL_FILE_BYTES) {
+        return { ok: false, error: 'storage-full' };
+      }
+      const id = await CQ.fileStore.stage(
+        { name: meta.name, type: meta.type, size, lastModified: meta.lastModified },
+        data
+      );
+      return { ok: true, id };
+    });
+  },
+
+  async [MSG.FILE_GET]({ id, fileId }) {
+    const q = await getQueue();
+    const it = q.find((i) => i.id === id);
+    if (!it || !(it.attachments || []).some((a) => a.fileId === fileId)) return { ok: false, error: 'not found' };
+    const rec = await CQ.fileStore.get(fileId);
+    if (!rec || rec.itemId !== id) return { ok: false, error: 'missing' };
+    return {
+      ok: true,
+      file: { name: rec.name, type: rec.type, size: rec.size, lastModified: rec.lastModified, data: rec.data }
+    };
   },
 
   async [MSG.QUEUE_UPDATE]({ id, text }) {
@@ -1127,6 +1193,7 @@ const handlers = {
   async [MSG.CLEAR_ALL]() {
     await locked(async () => {
       await chrome.storage.local.clear();
+      await CQ.fileStore.clear().catch((e) => log.warn('clear attachments failed', { error: e.message }));
     });
     await chrome.alarms.clearAll();
     updateBadge([]);

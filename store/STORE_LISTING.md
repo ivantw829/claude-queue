@@ -53,7 +53,7 @@ Claude Queue 解決一個 claude.ai 重度使用者都遇過的麻煩：訊息�
 
 【特色】
 - 完全在本機運作：沒有外部伺服器，不上傳任何資料，不載入遠端程式碼
-- 只處理純文字訊息；含附件的訊息會照原本的方式處理，不會被攔截（並提示你）
+- 文字和你從電腦加入的附件（圖片、PDF 等）都能排隊，附件只存在本機，送出後即刪除；Google Drive 等連接的附件無法保存，會照原本方式處理並提示你
 - 用量條顯示 5 小時 session 與每週用量百分比、重置倒數
 - 佇列可以直接編輯、刪除，或手動立即嘗試送出
 - 支援多個 claude.ai 分頁協調，避免同一則訊息被送出兩次
@@ -98,7 +98,7 @@ HOW IT WORKS
 
 FEATURES
 - Fully local: no external server, no data upload, no remote code loading
-- Handles plain-text messages only; messages with attachments are left untouched (and you're notified) rather than queued
+- Queues the text and any files you attached from your computer (images, PDFs, etc.); files are stored only on your device and deleted once sent. Connected attachments such as Google Drive can't be saved, so those messages are left untouched (and you're notified)
 - Usage bar shows your 5-hour session and weekly usage percentage, plus a countdown to reset
 - Queue items can be edited, deleted, or sent immediately on demand
 - Coordinates across multiple claude.ai tabs to avoid double-sending
@@ -153,7 +153,7 @@ CWS 的隱私權頁籤會問是否收集以下類別資料。因為本擴充功�
 - 健康資訊：否
 - 財務與付款資訊：否
 - 身分驗證資訊（密碼等）：否
-- 個人通訊內容：否（訊息文字只存在本機 `chrome.storage.local`，不會被傳送出裝置）
+- 個人通訊內容：否（訊息文字只存在本機 `chrome.storage.local`、附件只存在擴充功能的本機 IndexedDB，不會被傳送出裝置；重置後是透過 claude.ai 頁面本身送出，等同使用者自己操作）
 - 網站內容：否
 - 使用者活動（瀏覽紀錄、點擊等）：否
 - 網站使用紀錄：否

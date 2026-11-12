@@ -87,6 +87,7 @@
       CQ.ui.toast(t('toastSelectorMissing', { name }), { kind: 'error', duration: 15000 });
     });
 
+    CQ.attachments.install();
     CQ.interceptor.install();
 
     // 聚焦輸入框時（準備打字送出）刷新一次用量，讓送出時的同步判斷更準
@@ -108,6 +109,7 @@
         lastUrl = location.href;
         log.debug('url changed');
         CQ.interceptor.onNavigate();
+        CQ.attachments.reset();
         CQ.restore.onNavigate(); // 還原中離開原對話 → 中止，不會送到別的對話
         CQ.restore.check();
       }

@@ -9,6 +9,10 @@
  *   - 確定沒送出（文字仍完整在輸入框）時，重新整理分頁後重試（最多 LIMITS.MAX_RESTORE_RETRIES 次）
  *   - 可能已送出但無法確認時，標記失敗並通知，不自動重試
  *   - 任何無法完成的情況都以桌面通知結束，不會靜默卡住
+ *
+ * 附件：先用頁面上的上傳元件把檔案加回輸入區、等上傳完成，才填文字與倒數。
+ *   - 輸入區原本就有附件 → 自動模式不送（不把你的附件和佇列訊息混在一起）；手動模式讓你選
+ *   - 有任何一個檔案加不回去 → 自動模式不送（重新整理後重試，仍失敗就通知）；手動模式可下載附件自己加
  */
 (function (root) {
   const CQ = (root.CQ = root.CQ || {});
@@ -133,7 +137,10 @@
       attempt: { retries: attempt.retries || 0, reopened: attempt.reopened || 0 },
       token: null,
       targetKey: keyOf(item.url),
-      phase: 'prepare'
+      phase: 'prepare',
+      // 送出前輸入區應有的附件數（null = 不檢查）；preexisting = 還原前輸入區就有的附件數
+      expectedFiles: null,
+      preexisting: 0
     };
     const c = ctx;
     log.info('restore start', { id: item.id, mode, length: item.text.length, attempt: c.attempt });
@@ -250,6 +257,12 @@
       }
     }
 
+    // 輸入區已有附件（你的附件草稿，或之前加到一半的）
+    if (CQ.attachments.count() > 0) {
+      const r = await handleExistingAttachments(c);
+      if (r !== 'ok') return 'stopped';
+    }
+
     // 輸入框已有其他內容
     const existing = CQ.editor.getText(editor);
     const alreadyFilled = existing && CQ.text.sameText(existing, item.text);
@@ -279,6 +292,12 @@
           return 'stopped';
         }
       }
+    }
+
+    // 把附件加回去並等上傳完成（倒數要在這之後才開始）
+    if ((item.attachments || []).length) {
+      const r = await restoreAttachments(c);
+      if (r !== 'ok') return 'stopped';
     }
 
     if (!alreadyFilled) {
@@ -316,7 +335,7 @@
     if (choice === 'manual' || choice === 'cancelAuto') {
       choice = await CQ.ui.showBar({
         message: t('barRestored'),
-        sub: CQ.text.preview(item.text),
+        sub: CQ.text.preview(item.text) + filesSuffix(item),
         buttons: [
           { id: 'send', label: t('btnSend'), kind: 'primary' },
           { id: 'cancel', label: t('btnCancel'), kind: 'danger' },
@@ -337,6 +356,8 @@
       CQ.ui.toast(t('toastCancelled'), { kind: 'info' });
     } else if (choice === 'keep') {
       await CQ.editor.clear();
+      // 只在輸入區原本沒有你的附件時才移除（不動你自己加的）
+      if ((item.attachments || []).length && !c.preexisting) await CQ.attachments.removeAll();
       await release(c, 'ready');
       CQ.ui.toast(t('toastKeptInQueue'), { kind: 'info' });
     } else {
@@ -430,6 +451,9 @@
       return 'stopped';
     }
 
+    // 4b. 附件：上傳要完成；自動模式還要確認數量沒少（少了就不送）
+    if (!(await attachmentsAllowSend(c))) return 'stopped';
+
     // 5. 聊天室守門（按下送出前的最後一刻）
     if (c.navigated || !inTargetConversation(c)) {
       await handleNavigatedAway(c);
@@ -463,6 +487,130 @@
     c.token = null;
     CQ.ui.toast(t('toastSendFailed'), { kind: 'error' });
     return 'stopped';
+  }
+
+  function filesSuffix(item) {
+    const n = (item.attachments || []).length;
+    return n ? t('barFilesSuffix', { count: n }) : '';
+  }
+
+  /**
+   * 還原前輸入區已經有附件。回傳 'ok' 代表繼續，其他代表已處理（流程應結束）。
+   */
+  async function handleExistingAttachments(c) {
+    if (c.mode === 'auto') {
+      log.warn('composer already has attachments, not auto sending', { id: c.item.id });
+      await giveUp(c, 'composer-has-attachments');
+      return 'stopped';
+    }
+    for (;;) {
+      const choice = await CQ.ui.showBar({
+        message: t('barComposerHasAttachments'),
+        buttons: [
+          { id: 'recheck', label: t('btnRecheckAttachments'), kind: 'primary' },
+          { id: 'together', label: t('btnSendTogether') },
+          { id: 'keep', label: t('btnKeepInQueue') }
+        ]
+      });
+      if (choice === 'recheck') {
+        if (CQ.attachments.count() === 0) return 'ok';
+        continue;
+      }
+      if (choice === 'together') {
+        c.preexisting = CQ.attachments.count();
+        return 'ok';
+      }
+      if (choice === 'navigated') await handleNavigatedAway(c);
+      else if (choice !== 'gone') await release(c, 'ready');
+      return 'stopped';
+    }
+  }
+
+  /** 把佇列項目的附件加回輸入區。回傳 'ok' 代表繼續，其他代表已處理 */
+  async function restoreAttachments(c) {
+    const { item } = c;
+    const auto = c.mode === 'auto';
+    const base = CQ.attachments.count();
+
+    const loaded = await CQ.attachments.load(item);
+    if (!loaded.ok) {
+      log.error('attachments missing from storage', { id: item.id });
+      if (auto) {
+        await giveUp(c, 'attachments-missing');
+        return 'stopped';
+      }
+      const choice = await CQ.ui.showBar({
+        message: t('barAttachmentsMissing'),
+        sub: CQ.text.preview(item.text),
+        buttons: [
+          { id: 'textOnly', label: t('btnSendTextOnly'), kind: 'primary' },
+          { id: 'keep', label: t('btnKeepInQueue') }
+        ]
+      });
+      if (choice === 'textOnly') return 'ok';
+      if (choice === 'navigated') await handleNavigatedAway(c);
+      else if (choice !== 'gone') await release(c, 'ready');
+      return 'stopped';
+    }
+
+    CQ.ui.toast(t('toastAttaching', { count: loaded.files.length }), { kind: 'info' });
+    const res = await CQ.attachments.attach(loaded.files);
+    if (c.navigated) {
+      await handleNavigatedAway(c);
+      return 'stopped';
+    }
+    if (res.ok) {
+      c.expectedFiles = base + loaded.files.length;
+      return 'ok';
+    }
+
+    if (auto) {
+      // 還沒送出，重新整理後重試（會清掉加到一半的附件）；用完重試次數就通知你
+      await retry(c, 'attach-failed');
+      return 'stopped';
+    }
+    const choice = await CQ.ui.showBar({
+      message: t('barAttachFailed'),
+      sub: loaded.files.map((f) => f.name).join('、'),
+      buttons: [
+        {
+          id: 'download',
+          label: t('btnDownloadAttachments'),
+          keepOpen: true,
+          onClick: () => CQ.attachments.download(loaded.files)
+        },
+        { id: 'continue', label: t('btnAttachedManually'), kind: 'primary' },
+        { id: 'keep', label: t('btnKeepInQueue') }
+      ]
+    });
+    if (choice === 'continue') return 'ok'; // 你自己處理附件，不檢查數量
+    if (choice === 'navigated') {
+      await handleNavigatedAway(c);
+      return 'stopped';
+    }
+    if (choice !== 'gone') {
+      if (!base) await CQ.attachments.removeAll();
+      await release(c, 'ready');
+    }
+    return 'stopped';
+  }
+
+  /** 送出前的附件檢查。回傳 true 代表可以送出 */
+  async function attachmentsAllowSend(c) {
+    const end = Date.now() + TIMING.ATTACH_UPLOAD_WAIT_MS;
+    while (CQ.attachments.uploading() && Date.now() < end) await sleep(300);
+    const stillUploading = CQ.attachments.uploading();
+    const missing = c.expectedFiles != null && CQ.attachments.count() < c.expectedFiles;
+    if (!stillUploading && !(c.mode === 'auto' && missing)) return true;
+
+    log.warn('attachments not ready at send', { id: c.item.id, stillUploading, missing });
+    if (c.mode === 'auto') {
+      await retry(c, 'attach-failed');
+    } else {
+      await release(c, 'ready');
+      CQ.ui.toast(t('toastAttachmentsNotReady'), { kind: 'warn', duration: 8000 });
+    }
+    return false;
   }
 
   /** 新對話群組的第一則送出後，把其餘項目改指向剛建立的對話（依序送進同一個對話） */

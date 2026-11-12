@@ -1,6 +1,6 @@
 # Claude Queue 隱私權政策 / Privacy Policy
 
-最後更新 / Last updated：2026-11-03
+最後更新 / Last updated：2026-11-12
 
 > 本頁同時提供繁體中文與英文版本，供 Chrome Web Store 審核與使用者參考。
 > This page provides both Traditional Chinese and English versions for Chrome Web Store review and user reference.
@@ -11,7 +11,7 @@
 
 ### 本擴充功能是什麼
 
-Claude Queue 是一個非官方的社群 Chrome 擴充功能，用於 claude.ai 網頁聊天。當你的用量（5 小時 session 或每週額度）達到上限時，它會攔下你要送出的純文字訊息、存入本機佇列，並在額度重置後提醒你送出。
+Claude Queue 是一個非官方的社群 Chrome 擴充功能，用於 claude.ai 網頁聊天。當你的用量（5 小時 session 或每週額度）達到上限時，它會攔下你要送出的訊息（文字與你加入的附件）、存入本機佇列，並在額度重置後提醒你送出。
 
 本專案與 Anthropic 沒有隸屬、合作或背書關係。「Claude」是 Anthropic 的商標，這裡僅用於說明本工具適用的網站。
 
@@ -24,6 +24,7 @@ Claude Queue 是一個非官方的社群 Chrome 擴充功能，用於 claude.ai 
 | 資料 | 用途 | 儲存位置 |
 |---|---|---|
 | 你排入佇列的訊息文字 | 額度重置後自動填回輸入框 | 本機 `chrome.storage.local` |
+| 你排入佇列的訊息附件（檔案內容、檔名、類型、大小） | 額度重置後透過 claude.ai 頁面的上傳按鈕加回輸入框 | 本機擴充功能的 IndexedDB；訊息送出或刪除時一併刪除 |
 | claude.ai 回報的用量百分比與重置時間 | 顯示用量條、判斷何時可以送出 | 本機 `chrome.storage.local` |
 | 你的設定（是否自動送出、通知開關、輪詢頻率等） | 記住你的偏好 | 本機 `chrome.storage.local` |
 | 除錯紀錄（事件名稱、項目 id、文字長度、狀態） | 協助你自行除錯；**不含訊息內容** | 本機 `chrome.storage.local`，最多 500 筆，可在設定頁清除 |
@@ -33,7 +34,7 @@ Claude Queue 是一個非官方的社群 Chrome 擴充功能，用於 claude.ai 
 - 唯一發出的網路請求，是向 `claude.ai` 自身查詢用量的 **同源 GET 請求**（使用你既有的登入狀態），不會呼叫任何第三方 API 或分析服務。
 - 擴充功能只會在你按下「送出」、且系統判斷「用量已達上限」時，才讀取輸入框的文字內容，用途僅限於存入佇列。
 - 為了判斷訊息是否已成功送出、避免重複送出，擴充功能會在本機比對目前對話中**你自己最近幾則訊息**的文字；這項比對只在本機進行，結果不會被保存成可識別的紀錄，也不會傳送到任何地方。
-- 所有資料都留在 `chrome.storage.local`，不會同步到 Google 帳號、不會上傳到任何伺服器、不會賣給或分享給第三方、不會用於廣告或與本擴充功能無關的目的。
+- 所有資料都留在 `chrome.storage.local` 與擴充功能自己的 IndexedDB，不會同步到 Google 帳號、不會上傳到任何伺服器、不會賣給或分享給第三方、不會用於廣告或與本擴充功能無關的目的。
 
 ### 權限使用說明
 
@@ -60,7 +61,7 @@ Claude Queue 是一個非官方的社群 Chrome 擴充功能，用於 claude.ai 
 
 ### What this extension is
 
-Claude Queue is an unofficial, community-built Chrome extension for the claude.ai web chat. When your usage limit (5-hour session or weekly quota) is reached, it intercepts the plain-text message you were about to send, stores it in a local queue, and reminds you to send it once your quota resets.
+Claude Queue is an unofficial, community-built Chrome extension for the claude.ai web chat. When your usage limit (5-hour session or weekly quota) is reached, it intercepts the message you were about to send (its text and any files you attached), stores it in a local queue, and reminds you to send it once your quota resets.
 
 This project is not affiliated with, endorsed by, or sponsored by Anthropic. "Claude" is a trademark of Anthropic, used here only to describe the site this tool works with.
 
@@ -73,6 +74,7 @@ The extension stores the following, locally on your own browser device, using Ch
 | Data | Purpose | Where it's stored |
 |---|---|---|
 | The text of messages you queue | Auto-filled back into the composer after your quota resets | Local `chrome.storage.local` |
+| Files attached to messages you queue (content, name, type, size) | Re-attached through claude.ai's own upload control after your quota resets | The extension's local IndexedDB; deleted when the message is sent or removed |
 | Usage percentages and reset times reported by claude.ai | Shown in the usage bar; used to decide when sending is allowed | Local `chrome.storage.local` |
 | Your settings (auto-send toggle, notification toggle, polling interval, etc.) | Remembers your preferences | Local `chrome.storage.local` |
 | Debug log (event name, item id, text length, status) | Lets you debug issues yourself; **never includes message content** | Local `chrome.storage.local`, capped at 500 entries, clearable from the options page |
@@ -82,7 +84,7 @@ The extension stores the following, locally on your own browser device, using Ch
 - The only network request the extension makes is a **same-origin GET request to claude.ai itself**, to read your usage (using your existing login session). It never calls any third-party API or analytics service.
 - The extension only reads the text in the composer when you press send and the system determines your usage limit has been reached — solely to store it in the queue.
 - To confirm a message was actually sent and to avoid duplicate sends, the extension compares the text of **your own most recent messages** in the current conversation, locally on your device. This comparison happens only on-device; the result is not kept as an identifiable record and is never transmitted anywhere.
-- All data stays in `chrome.storage.local`: it is never synced to your Google account, never uploaded to any server, never sold or shared with third parties, and never used for advertising or any purpose unrelated to the extension's function.
+- All data stays in `chrome.storage.local` and the extension's own IndexedDB: it is never synced to your Google account, never uploaded to any server, never sold or shared with third parties, and never used for advertising or any purpose unrelated to the extension's function.
 
 ### Permissions
 

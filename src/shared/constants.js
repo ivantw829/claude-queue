@@ -46,6 +46,8 @@
     SEND_BUTTON_WAIT_MS: 8000, // 填入後等送出按鈕變成可按
     NEW_CHAT_URL_WAIT_MS: 15 * 1000, // 新對話送出後等網址變成 /chat/<id>
     RESTORE_CHECK_DELAYS_MS: [1500, 5000, 10000], // 頁面載入後領取還原工作的時間點
+    ATTACH_APPEAR_WAIT_MS: 5000, // 加入附件後等附件卡片出現（逾時改用拖放）
+    ATTACH_UPLOAD_WAIT_MS: 2 * 60 * 1000, // 等附件上傳完成
     KEEPALIVE_BUFFER_MS: 90 * 1000, // 工作階段結束後再等 90 秒（比佇列的重置檢查晚，讓排隊的訊息先送）
     KEEPALIVE_COOLDOWN_MS: 10 * 60 * 1000, // 自動重設兩次嘗試之間的最短間隔
     SESSION_LENGTH_MS: 5 * 60 * 60 * 1000 // 工作階段長度（API 沒給結束時間時用來估計）
@@ -55,7 +57,11 @@
     MAX_LOGS: 500,
     MAX_SENT_IDS: 200,
     PASTE_FALLBACK_MAX_CHARS: 2000, // 過長的貼上會被 claude.ai 轉為附件，故限制
-    MAX_RESTORE_RETRIES: 2 // 確定未送出時，重新整理分頁後重試的次數上限
+    MAX_RESTORE_RETRIES: 2, // 確定未送出時，重新整理分頁後重試的次數上限
+    // 附件（和 claude.ai 自己的上限一致：單檔 30MB、每則 20 個）
+    MAX_FILE_BYTES: 30 * 1024 * 1024,
+    MAX_FILES_PER_ITEM: 20,
+    MAX_TOTAL_FILE_BYTES: 300 * 1024 * 1024 // 整個佇列的附件總量
   });
 
   CQ.MSG = Object.freeze({
@@ -69,6 +75,8 @@
     QUEUE_MARK_FAILED: 'queue:markFailed',
     QUEUE_RELEASE: 'queue:release',
     QUEUE_MARK_SENT_BY_TEXT: 'queue:markSentByText',
+    FILE_STAGE: 'file:stage', // 排隊前先把附件逐一交給 SW 暫存
+    FILE_GET: 'file:get', // 還原時取回附件
     RESTORE_CHECK: 'restore:check',
     RESTORE_NEXT: 'restore:next',
     RESTORE_RETRY: 'restore:retry', // 確定未送出 → 重新整理分頁後重試

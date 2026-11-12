@@ -17,8 +17,8 @@ for f in $(find src -name '*.js'); do node --check "$f"; done   # syntax check
 python3 -m http.server 8765                         # then open http://localhost:8765/test/harness/index.html
 ```
 
-- `test/sw.test.js` loads the real `service-worker.js` into a `vm` context with in-memory `chrome.*` stubs.
-- `test/harness/index.html` runs the real content scripts against a fake claude.ai page with a real ProseMirror editor. Every case should show PASS at the bottom of the page.
+- `test/sw.test.js` loads the real `service-worker.js` into a `vm` context with in-memory `chrome.*` stubs. `test/helpers/sw-env.js` is the same environment as a reusable helper (used by `test/attachments.test.js`).
+- `test/harness/index.html` runs the real content scripts against a fake claude.ai page with a real ProseMirror editor (also startable as the `harness` config in `.claude/launch.json`). A full run takes about 2 minutes; every case should show PASS at the bottom of the page and `window.__done` becomes true. The browser caches the scripts, so after editing them reload with the cache bypassed or you will test stale code. Synthetic events are not `isTrusted`, so the harness drives capture and interception through the test-only hooks `CQ.attachments._record` and `CQ.interceptor._handleSendAttempt`.
 - Load the extension in Chrome via `chrome://extensions` → Developer mode → Load unpacked (pick the repo root), then reload any open claude.ai tabs.
 - `TESTING.md` has the manual checklist. It also explains how to simulate "usage full": settings page → 模擬用量已滿.
 
@@ -36,10 +36,11 @@ python3 -m http.server 8765                         # then open http://localhost
    - verify it is in the right conversation (`conversationKey`)
    - re-check usage
    - check for a duplicate message
-   - handle a draft already in the editor
+   - handle attachments already in the composer, then a text draft already in the editor
+   - re-attach the item's files and wait for their upload to finish
    - fill the editor
    - show the confirm bar, or a 3s countdown in auto mode
-   - `QUEUE_CLAIM` (gets a token) → click send → `QUEUE_MARK_SENT` (with the token)
+   - `QUEUE_CLAIM` (gets a token) → re-check usage and attachments → click send → `QUEUE_MARK_SENT` (with the token)
 
 **Duplicate-send protection is the core invariant:**
 - Sending requires a claim token.
@@ -58,6 +59,11 @@ Keep these guarantees when changing the send path.
 
 Whether to send an auto-reset message is decided by `CQ.session.keepaliveCheck()` in `src/shared/session.js`, shared by the SW, restore flow and popup. It reads only the usage API buckets, never the page's limit banner: a stale banner stays on an unrefreshed tab after the session ends, and its reset time re-parses as the next day. After a session ends the API may return `five_hour: null`, `{0, null}`, or 100% with a past `resets_at`; all count as idle (`test/keepalive.test.js` covers each).
 
+**Attachments** (`src/content/attachments.js`, `src/background/filestore.js`):
+- Capture: trusted `change` / `drop` / `paste` events record `File` objects as they are attached; `collect()` (synchronous, called by the interceptor) maps each composer attachment card to a recorded file, by filename when visible, else by count. Any mismatch → not queueable.
+- Storage: content sends each file as base64 via `FILE_STAGE`; `QUEUE_ADD` with `attachments: [stageId]` links them to the item, which keeps only metadata (`attachments: [{fileId, name, type, size}]`). Content lives in the extension's IndexedDB (not `chrome.storage`, which caps at 10MB without `unlimitedStorage`). `saveQueue()` runs `fileStore.gc()` after every write, so any removal path deletes the item's files; failed items keep theirs. Tests use the in-memory backend (no `indexedDB` in Node).
+- Restore: files are re-added through the page's `<input type="file">` (fallback: synthetic drop) and must finish uploading before text is filled; `doSend` re-checks. In auto mode, a pre-existing composer attachment, a missing file, or a failed/timeout upload never sends.
+
 **Usage detection** (`src/content/usage.js`) runs in the page with the user's cookies:
 - `GET /api/organizations` → `/api/organizations/{uuid}/usage`, reading `five_hour` / `seven_day` `utilization` and `resets_at`.
 - Falls back to scanning the page for limit text.
@@ -67,16 +73,16 @@ The `interceptor.js` blocking decision must be synchronous (`preventDefault`), s
 
 ## Fragile parts (claude.ai changes)
 
-All DOM selectors live in `src/content/selectors.js`, each as a list of fallbacks; when a selector breaks, add the new one at the front of its list. Endpoint paths and response-field aliases live in `usage.js` (`ENDPOINTS`, `FIELD_ALIASES`). Editor filling (`editor.js`) uses `execCommand('insertText')` first because ProseMirror ignores direct DOM edits. The README section "claude.ai 改版時最容易壞的地方" maps symptoms to files.
+All DOM selectors live in `src/content/selectors.js`, each as a list of fallbacks; when a selector breaks, add the new one at the front of its list. Entries commented "2026-11 實測" were checked against the live site (composer, attachment cards, remove buttons, upload state, file input). One finding to keep in mind: claude.ai does not disable the send button while an attachment is uploading, so the code waits for the card's `data-state="pending"` / `aria-busy` to clear. `attachmentItem` takes the union of all its candidates (innermost matches only), unlike other groups that use the first candidate with results. Endpoint paths and response-field aliases live in `usage.js` (`ENDPOINTS`, `FIELD_ALIASES`). Editor filling (`editor.js`) uses `execCommand('insertText')` first because ProseMirror ignores direct DOM edits. The README section "claude.ai 改版時最容易壞的地方" maps symptoms to files.
 
 ## Constraints from the original spec
 
 - Permissions stay minimal: `storage`, `alarms`, `notifications`, host `https://claude.ai/*`.
 - No external servers, no remote code, no data upload.
 - Never forge or replay claude.ai's internal chat requests. Sending is always done by filling the editor and clicking the real send button.
-- Only plain text is queued. Messages with attachments are left alone.
-- Debug logs must not contain message content.
+- Text plus files the user attached from their computer are queued. Attachments the extension can't capture (Drive/GitHub, long-paste attachments, files attached before the content script loaded) mean the message is left alone. Attachment-only messages (no text) are never queued.
+- Debug logs must not contain message content or attachment file names.
 - New UI strings go in `_locales/zh_TW/messages.json`. They use named `{placeholder}` syntax, substituted by `CQ.t`, not chrome's `$1`.
 - Commits and README credit the project as developed by Claude Opus 5.5, with the `Co-Authored-By` trailer.
 
-`HANDOFF.md` (untracked) is a running Chinese-language log of decisions, unverified risks, and open TODOs. Read it when picking up work.
+`GUIDE.md` is the beginner-facing user guide. `HANDOFF.md` (untracked) is a running Chinese-language log of decisions, unverified risks, and open TODOs. Read it when picking up work.
