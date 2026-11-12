@@ -12,6 +12,7 @@
     autoResetText: 'Hello World!', // 自動重設送出的文字（可在設定頁修改）
     notifications: true, // 桌面通知
     pollMinutes: 2, // 用量輪詢頻率（分鐘）
+    updateCheck: true, // 每天檢查一次 GitHub 上有沒有新版本（只有從 GitHub 安裝時才會檢查）
     debugLog: false, // 記錄 debug log
     debugSimulate: false, // 模擬「用量已滿」
     debugSimulateMinutes: 2, // 模擬多久後重置

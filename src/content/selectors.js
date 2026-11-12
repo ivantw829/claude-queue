@@ -32,6 +32,7 @@
 
     // 送出按鈕（aria-label 可能隨介面語言變動，忽略大小寫）
     sendButton: [
+      'button[data-testid="chat-input-send"]', // 2026-11 實測（aria-label 依介面語言是「傳送訊息」）
       'button[aria-label="Send message" i]',
       'button[aria-label="Send" i]',
       'button[aria-label="傳送訊息"]',
@@ -58,6 +59,46 @@
       'img[alt][src^="blob:"]',
       'button[aria-label^="Remove" i]',
       'button[aria-label*="移除"]'
+    ],
+
+    // 輸入區中「每個附件一張」的卡片（用來計數、比對檔名）。
+    // 會合併所有候選的結果，只保留最內層的元素（不含按鈕與 input），所以外層清單容器不會被算成一個附件。
+    // 2026-11 實測：圖片與文件都是 <div data-testid="file-thumbnail" data-cds-attachment>，卡片內有檔名
+    attachmentItem: [
+      '[data-testid="file-thumbnail"]',
+      '[data-cds-attachment]',
+      '[data-testid*="attachment" i]',
+      '[data-testid*="file-preview" i]',
+      '[data-testid*="file-card" i]'
+    ],
+
+    // 附件卡片上的「移除」按鈕（排隊成功後用來清空輸入區的附件）
+    // 2026-11 實測：<button data-cds-attachment-remove aria-label="移除 檔名">（平常 opacity-0，click() 仍有效）
+    attachmentRemove: [
+      'button[data-cds-attachment-remove]',
+      'button[aria-label^="Remove" i]',
+      'button[aria-label*="移除"]',
+      'button[aria-label*="Delete" i]',
+      'button[data-testid*="remove" i]'
+    ],
+
+    // 附件上傳中的指示（還原時等它消失才送出）
+    // 2026-11 實測：上傳中的卡片是 data-state="pending" aria-busy="true"，完成後兩者都消失。
+    // 注意：上傳中送出按鈕「不會」被停用，所以一定要等這個指示消失
+    attachmentUploading: [
+      '[data-testid="file-thumbnail"][data-state="pending"]',
+      '[aria-busy="true"]',
+      '[role="progressbar"]',
+      '.animate-spin',
+      '[data-testid*="upload" i][data-state="loading"]'
+    ],
+
+    // 上傳檔案用的 <input type="file">（還原時用它把檔案加回去）
+    // 2026-11 實測：<input type="file" multiple data-testid="file-upload" id="chat-input-file-upload-onpage">，在 fieldset 內；
+    // 用 DataTransfer 設定 files 再送出 change，claude.ai 會正常上傳
+    fileInput: [
+      'input[type="file"][data-testid="file-upload"]',
+      'input[type="file"]:not([webkitdirectory])'
     ],
 
     // 對話中「使用者的訊息」氣泡（用於確認送出成功、偵測重複）

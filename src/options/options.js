@@ -9,6 +9,8 @@
   CQ.i18n.applyI18n(document);
   document.title = t('optionsTitle');
   $('version').textContent = 'v' + chrome.runtime.getManifest().version;
+  $('guideLink').href = CQ.version.GUIDE_URL;
+  $('guideLink').textContent = t('optGuideLink');
 
   let savedTimer = null;
   function flashSaved(msg = t('optSaved')) {
@@ -22,6 +24,7 @@
   function render(s) {
     $('autoSend').checked = s.autoSend;
     $('notifications').checked = s.notifications;
+    $('updateCheck').checked = s.updateCheck;
     $('autoReset').checked = s.autoReset;
     if (document.activeElement !== $('autoResetText')) $('autoResetText').value = s.autoResetText;
     $('pollMinutes').value = s.pollMinutes;
@@ -66,6 +69,7 @@
   });
   $('autoResetText').addEventListener('change', (e) => save({ autoResetText: e.target.value }));
   $('notifications').addEventListener('change', (e) => save({ notifications: e.target.checked }));
+  $('updateCheck').addEventListener('change', (e) => save({ updateCheck: e.target.checked }));
   $('pollMinutes').addEventListener('change', (e) => save({ pollMinutes: Number(e.target.value) }));
   $('debugLog').addEventListener('change', (e) => save({ debugLog: e.target.checked }));
   $('debugSimulate').addEventListener('change', (e) => {
@@ -119,6 +123,35 @@
   chrome.storage.local.get(K.KEEPALIVE).then((d) => renderKeepaliveCheck(d[K.KEEPALIVE]));
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[K.KEEPALIVE]) renderKeepaliveCheck(changes[K.KEEPALIVE].newValue);
+  });
+
+  // ───────────── 新版本檢查狀態 ─────────────
+
+  async function renderUpdateStatus(st) {
+    const el = $('updateStatus');
+    let dev = true;
+    try {
+      dev = (await chrome.management.getSelf()).installType === 'development';
+    } catch (_) {}
+    if (!dev) {
+      el.textContent = t('optUpdateStore');
+      return;
+    }
+    if (!st || !st.checkedAt) {
+      el.textContent = t('optUpdateNever');
+      return;
+    }
+    const time = new Date(st.checkedAt).toLocaleString();
+    const current = chrome.runtime.getManifest().version;
+    if (st.error) el.textContent = t('optUpdateError', { time, error: st.error });
+    else if (st.latest && CQ.version.compare(st.latest, current) > 0)
+      el.textContent = t('optUpdateNewer', { time, version: st.latest });
+    else el.textContent = t('optUpdateLatest', { time, version: st.latest || current });
+  }
+
+  chrome.storage.local.get(K.UPDATE).then((d) => renderUpdateStatus(d[K.UPDATE]));
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[K.UPDATE]) renderUpdateStatus(changes[K.UPDATE].newValue);
   });
 
   // ───────────── logs ─────────────

@@ -18,7 +18,7 @@
     "message": "用量已滿，訊息已排入佇列，預計 {time} 重置"
   },
   "toastHasAttachment": {
-    "message": "此訊息含附件，無法自動排隊（已照原本方式處理）"
+    "message": "這則訊息有無法保存的附件（例如 Google Drive 檔案、長文字貼上轉成的附件），無法排隊，已照原本方式處理"
   },
   "toastSaveFailed": {
     "message": "訊息保存失敗，文字仍保留在輸入框，請勿關閉分頁"
@@ -544,5 +544,119 @@
   },
   "kaResultUnknown": {
     "message": "{result}"
+  },
+  "toastQueuedWithFiles": {
+    "message": "用量已滿，訊息與 {count} 個附件已排入佇列，預計 {time} 重置"
+  },
+  "toastAttachmentTooLarge": {
+    "message": "有附件超過 30MB，無法排隊（已照原本方式處理）"
+  },
+  "toastAttachmentTooMany": {
+    "message": "附件超過 20 個，無法排隊（已照原本方式處理）"
+  },
+  "toastAttachmentStorageFull": {
+    "message": "佇列中的附件已達 300MB 上限，這則訊息沒有排隊（內容仍在輸入框）"
+  },
+  "toastAttachmentSaveFailed": {
+    "message": "附件無法存入佇列，這則訊息沒有排隊（內容仍在輸入框）"
+  },
+  "toastAttachmentsNotRemoved": {
+    "message": "訊息已排隊，但輸入區的附件沒辦法自動移除，請手動移除"
+  },
+  "toastAttaching": {
+    "message": "正在把 {count} 個附件加回輸入區…"
+  },
+  "toastAttachmentsNotReady": {
+    "message": "附件還在上傳或數量不符，已保留在佇列"
+  },
+  "barFilesSuffix": {
+    "message": "　＋{count} 個附件"
+  },
+  "barComposerHasAttachments": {
+    "message": "輸入區已經有附件。要先移除，還是和佇列中的訊息一起送出？"
+  },
+  "btnRecheckAttachments": {
+    "message": "我已移除，重新檢查"
+  },
+  "btnSendTogether": {
+    "message": "一起送出"
+  },
+  "barAttachmentsMissing": {
+    "message": "找不到這則訊息的附件（可能已被清除）。"
+  },
+  "btnSendTextOnly": {
+    "message": "只送文字"
+  },
+  "barAttachFailed": {
+    "message": "附件沒辦法自動加回輸入區。可以先下載附件、自己加入後再按「我已加好，繼續」。"
+  },
+  "btnDownloadAttachments": {
+    "message": "下載附件"
+  },
+  "btnAttachedManually": {
+    "message": "我已加好，繼續"
+  },
+  "reasonAttachFailed": {
+    "message": "附件無法加回輸入區或上傳逾時"
+  },
+  "reasonAttachmentsMissing": {
+    "message": "找不到這則訊息的附件"
+  },
+  "reasonComposerHasAttachments": {
+    "message": "輸入區已有其他附件，為避免一起送出已停止"
+  },
+  "popupFiles": {
+    "message": "📎 {count} 個附件（{size}）：{names}"
+  },
+  "notifyUpdateTitle": {
+    "message": "Claude Queue 有新版本"
+  },
+  "notifyUpdateBody": {
+    "message": "新版本 v{version} 已推出（目前 v{current}）。點這裡看更新步驟。"
+  },
+  "updateAvailable": {
+    "message": "有新版本 v{version}"
+  },
+  "updateHowTo": {
+    "message": "如何更新"
+  },
+  "updateDone": {
+    "message": "已更新到 v{version}"
+  },
+  "updateChanges": {
+    "message": "看更新內容"
+  },
+  "btnDismiss": {
+    "message": "不再提示"
+  },
+  "optSectionUpdate": {
+    "message": "更新"
+  },
+  "optUpdateCheck": {
+    "message": "自動檢查新版本"
+  },
+  "optUpdateCheckDesc": {
+    "message": "每天一次，只讀取 GitHub 上的版本號，不會送出任何資料。有新版本時發一次通知，工具列小視窗也會顯示提示。從 Chrome 線上應用程式商店安裝時不會檢查（商店會自動更新）。"
+  },
+  "optUpdateNever": {
+    "message": "還沒檢查過"
+  },
+  "optUpdateLatest": {
+    "message": "最後檢查：{time}，已是最新版本（v{version}）"
+  },
+  "optUpdateNewer": {
+    "message": "最後檢查：{time}，有新版本 v{version}"
+  },
+  "optUpdateError": {
+    "message": "最後檢查：{time}，檢查失敗（{error}），明天會再試"
+  },
+  "optUpdateStore": {
+    "message": "從商店安裝，Chrome 會自動更新，不需要檢查"
+  },
+  "optGuide": {
+    "message": "使用教學"
+  },
+  "optGuideLink": {
+    "message": "新手教學：從安裝到使用"
   }
 }

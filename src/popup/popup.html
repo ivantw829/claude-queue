@@ -15,6 +15,12 @@
       </div>
     </header>
 
+    <div id="updateNotice" class="update-notice small" hidden>
+      <span class="msg"></span>
+      <a class="link" target="_blank" rel="noopener noreferrer"></a>
+      <button class="close" data-i18n-title="btnDismiss" aria-label="dismiss">×</button>
+    </div>
+
     <section class="card" id="usageCard">
       <div class="meter" id="sessionMeter">
         <div class="meter-head">
@@ -52,6 +58,7 @@
           <span class="time muted small"></span>
         </div>
         <div class="text"></div>
+        <div class="files small" hidden></div>
         <textarea class="editor" rows="5" hidden></textarea>
         <div class="meta small"></div>
         <div class="error small" hidden></div>
@@ -71,6 +78,7 @@
     <script src="../shared/logger.js"></script>
     <script src="../shared/text.js"></script>
     <script src="../shared/session.js"></script>
+    <script src="../shared/version.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
