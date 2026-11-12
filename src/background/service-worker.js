@@ -9,7 +9,8 @@ importScripts(
   '/src/shared/i18n.js',
   '/src/shared/settings.js',
   '/src/shared/logger.js',
-  '/src/shared/text.js'
+  '/src/shared/text.js',
+  '/src/shared/session.js'
 );
 
 const { STORAGE_KEYS: K, STATUS, ALARMS, TIMING, LIMITS, MSG } = CQ;
@@ -377,19 +378,17 @@ function setKeepaliveState(patch) {
   return p;
 }
 
-/** 目前工作階段的結束時間；沒有進行中的工作階段時回傳 null */
-function sessionEndAt(snap, state, now = Date.now()) {
-  const r = snap && snap.session ? Number(snap.session.resetsAt) : 0;
-  if (r && r > now) return r;
-  // API 沒給結束時間（或還沒更新）但我們剛送過 → 以送出時間 + 5 小時估計，避免重複送出
-  const est = state.lastSentAt ? state.lastSentAt + TIMING.SESSION_LENGTH_MS : 0;
-  return est > now ? est : null;
+/**
+ * 自動重設的狀態判斷（CQ.session.keepaliveCheck，只看 API，不看頁面上的上限提示）。
+ * 結果寫進 keepalive.lastCheck，就算沒開 debug log，也能在設定頁看到最後一次檢查的結論。
+ */
+function checkKeepalive(snap, state, now = Date.now()) {
+  return CQ.session.keepaliveCheck(snap, state, now);
 }
 
-/** 工作階段已歸零（沒有進行中的工作階段，而且沒有任何上限已滿） */
-function isSessionIdle(snap, state, now = Date.now()) {
-  if (!snap || !snap.session || snap.full !== false) return false;
-  return sessionEndAt(snap, state, now) == null;
+async function recordCheck(why, result, extra = {}) {
+  await setKeepaliveState({ lastCheck: { at: Date.now(), why, result, ...extra } });
+  log.info('keepalive check', { why, result, ...extra });
 }
 
 async function scheduleKeepaliveAlarm(snap) {
@@ -400,15 +399,18 @@ async function scheduleKeepaliveAlarm(snap) {
   }
   const state = await getKeepaliveState();
   const now = Date.now();
+  const c = checkKeepalive(snap, state, now);
   let when = null;
-  const end = sessionEndAt(snap, state, now);
-  if (snap && snap.full === true && Number(snap.resetAt) > now) {
-    // 上限已滿（例如每週上限）→ 等它重置後再看
-    when = Math.max(end || 0, Number(snap.resetAt)) + TIMING.KEEPALIVE_BUFFER_MS;
-  } else if (end) {
-    when = end + TIMING.KEEPALIVE_BUFFER_MS;
+  if (c.result === 'session-active' || c.result === 'recently-sent') {
+    when = c.endAt + TIMING.KEEPALIVE_BUFFER_MS;
+  } else if (c.result === 'weekly-full') {
+    // 每週上限已滿 → 等它重置後再看（不知道時間就每小時看一次）
+    when = c.endAt ? c.endAt + TIMING.KEEPALIVE_BUFFER_MS : now + 60 * 60 * 1000;
+  } else if (c.result === 'no-usage-data' && state.lastKnownEnd > now) {
+    // 讀不到用量，但知道上一個工作階段何時結束 → 到時候再看
+    when = state.lastKnownEnd + TIMING.KEEPALIVE_BUFFER_MS;
   } else if (state.failCount < KEEPALIVE_MAX_FAILS) {
-    // 已歸零但這次還不能送（冷卻中、佇列正在送…）→ 稍後再檢查
+    // 已歸零但這次還不能送（冷卻中、佇列正在送…），或讀不到用量 → 稍後再檢查
     when = Math.max(state.lastAttemptAt + TIMING.KEEPALIVE_COOLDOWN_MS, now + 60 * 1000);
   }
   if (!when) {
@@ -418,30 +420,29 @@ async function scheduleKeepaliveAlarm(snap) {
   const existing = await chrome.alarms.get(ALARMS.KEEPALIVE);
   if (!existing || Math.abs(existing.scheduledTime - when) > 1000) {
     await chrome.alarms.create(ALARMS.KEEPALIVE, { when });
-    log.info('keepalive alarm scheduled', { when: new Date(when).toISOString() });
+    log.info('keepalive alarm scheduled', { when: new Date(when).toISOString(), result: c.result });
   }
 }
 
 /**
- * 符合條件就把自動重設訊息加進佇列並開啟專用對話。
- * unverified：沒有用量快照可以確認（沒有開著的 claude.ai 分頁）→ 交給頁面確認
+ * 把自動重設訊息加進佇列並開啟專用對話。回傳結果字串（寫進 lastCheck）。
+ * unverified：沒有 API 用量資料可以確認（沒有開著的分頁，或端點讀取失敗）→ 交給頁面再確認
  * force：略過冷卻（專用對話被刪除、改開新對話時）
  */
-async function maybeTriggerKeepalive(snap, why, { unverified = false, force = false } = {}) {
+async function triggerKeepalive(why, { unverified = false, force = false } = {}) {
   const settings = await CQ.settings.load();
-  if (!settings.autoReset) return false;
+  if (!settings.autoReset) return 'disabled';
   const state = await getKeepaliveState();
   const now = Date.now();
-  if (unverified ? sessionEndAt(null, state, now) : !isSessionIdle(snap, state, now)) return false;
-  if (state.failCount >= KEEPALIVE_MAX_FAILS) return false;
-  if (!force && now - state.lastAttemptAt < TIMING.KEEPALIVE_COOLDOWN_MS) return false;
+  if (state.failCount >= KEEPALIVE_MAX_FAILS) return 'paused';
+  if (!force && now - state.lastAttemptAt < TIMING.KEEPALIVE_COOLDOWN_MS) return 'cooldown';
 
   const item = await locked(async () => {
     const q = await getQueue();
-    if (q.some((i) => i.keepalive)) return null;
+    if (q.some((i) => i.keepalive)) return 'already-queued';
     // 佇列的訊息正在送（或開著自動送出且有可送的訊息）→ 那則訊息本身就會開始新的工作階段
-    if (q.some((i) => i.claim || (i.restoring && now - i.restoring.at < RESTORING_TTL_MS))) return null;
-    if (settings.autoSend && q.some((i) => isAutoEligible(i, q, now))) return null;
+    if (q.some((i) => i.claim || (i.restoring && now - i.restoring.at < RESTORING_TTL_MS))) return 'queue-busy';
+    if (settings.autoSend && q.some((i) => isAutoEligible(i, q, now))) return 'queue-busy';
     const it = {
       id: CQ.text.uuid(),
       text: settings.autoResetText,
@@ -462,10 +463,17 @@ async function maybeTriggerKeepalive(snap, why, { unverified = false, force = fa
     await saveQueue(q);
     return it;
   });
-  if (!item) return false;
+  if (typeof item === 'string') return item;
   await setKeepaliveState({ lastAttemptAt: now });
   log.info('keepalive triggered', { why, unverified, newChat: !state.conversationUrl });
   await openItem(item, 'auto');
+  return 'triggered';
+}
+
+/** 沒有 API 資料時，只有在「知道上一個工作階段已經結束、而且之後沒送過」時才送 */
+function knownEndedWithoutApi(state, now) {
+  if (state.lastKnownEnd && state.lastKnownEnd > now) return false; // 工作階段還在進行
+  if (state.lastSentAt && state.lastSentAt + TIMING.SESSION_LENGTH_MS > now) return false; // 剛送過
   return true;
 }
 
@@ -473,12 +481,25 @@ async function evaluateKeepalive(snap, why) {
   const settings = await CQ.settings.load();
   if (!settings.autoReset) return;
   const now = Date.now();
-  // 看到工作階段正在進行（你自己用了 Claude）→ 清掉連續失敗次數，恢復自動重設
-  if (snap && snap.session && Number(snap.session.resetsAt) > now) {
-    const st = await getKeepaliveState();
-    if (st.failCount) await setKeepaliveState({ failCount: 0 });
+  let state = await getKeepaliveState();
+  const c = checkKeepalive(snap, state, now);
+
+  if (c.result === 'session-active') {
+    // 記下工作階段結束時間（之後讀不到用量時用來判斷）；你自己用了 Claude → 清掉連續失敗次數
+    const patch = {};
+    if (state.lastKnownEnd !== c.endAt) patch.lastKnownEnd = c.endAt;
+    if (state.failCount) patch.failCount = 0;
+    if (Object.keys(patch).length) state = await setKeepaliveState(patch);
   }
-  await maybeTriggerKeepalive(snap, why);
+
+  let result = c.result;
+  if (c.idle) {
+    result = await triggerKeepalive(why);
+  } else if (c.result === 'no-usage-data' && state.lastKnownEnd && knownEndedWithoutApi(state, now)) {
+    // 用量端點讀取失敗，但上一個工作階段確定已經結束 → 開啟對話，由頁面再確認
+    result = await triggerKeepalive(why, { unverified: true });
+  }
+  await recordCheck(why, result, c.endAt ? { endAt: c.endAt } : {});
   await scheduleKeepaliveAlarm(snap);
 }
 
@@ -490,11 +511,16 @@ async function handleKeepaliveAlarm() {
   log.info('keepalive alarm', { hasTab: !!snap });
   if (snap) {
     await evaluateKeepalive(snap, 'alarm');
-  } else {
-    // 沒有可以查詢的 claude.ai 分頁 → 直接開啟專用對話，頁面會再確認工作階段是否真的歸零
-    await maybeTriggerKeepalive(null, 'alarm-no-tab', { unverified: true });
-    await scheduleKeepaliveAlarm(await getVal(K.USAGE, null));
+    return;
   }
+  // 沒有可以查詢的 claude.ai 分頁（沒開、被凍結或被 Chrome 的記憶體節省功能丟棄）
+  // → 直接開啟專用對話，頁面載入後會再確認工作階段是否真的歸零
+  const state = await getKeepaliveState();
+  const result = knownEndedWithoutApi(state, Date.now())
+    ? await triggerKeepalive('alarm-no-tab', { unverified: true })
+    : 'session-active';
+  await recordCheck('alarm-no-tab', result);
+  await scheduleKeepaliveAlarm(await getVal(K.USAGE, null));
 }
 
 async function keepaliveSent() {
@@ -510,7 +536,7 @@ async function keepaliveFailed(item, reason, { notify: shouldNotify }) {
     await setKeepaliveState({ conversationUrl: null, lastError: reason });
     log.warn('keepalive conversation missing, retrying in a new chat');
     if (!CQ.text.isNewChatUrl(item.url)) {
-      await maybeTriggerKeepalive(null, 'conversation-missing', { unverified: true, force: true });
+      await triggerKeepalive('conversation-missing', { unverified: true, force: true });
       return;
     }
   }
@@ -1079,9 +1105,8 @@ const handlers = {
         .map((i) => i.id);
       if (ids.length) await markReady(ids, { unverified: false });
     }
-    if (['api', 'simulated'].includes(snapshot.source) || snapshot.full === true) {
-      await evaluateKeepalive(snapshot, 'snapshot');
-    }
+    // 自動重設只看 API 的用量資料（頁面殘留的上限提示不算），讀不到 API 時也要評估（記錄原因、排程）
+    await evaluateKeepalive(snapshot, 'snapshot');
     return { ok: true };
   },
 

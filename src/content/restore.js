@@ -210,18 +210,14 @@
 
     // 確認額度真的恢復
     const snap = await CQ.usageState.refresh({ timeout: TIMING.USAGE_FETCH_TIMEOUT_MS });
-    if (snap && snap.full === true) {
+    if (item.keepalive) {
+      // 自動重設只看 API：頁面上殘留的上限提示不代表還不能送
+      if (await keepaliveBlocked(c, snap)) return 'stopped';
+      CQ.ui.toast(t('toastKeepalive'), { kind: 'info', duration: 8000 });
+    } else if (snap && snap.full === true) {
       await handleStillFull(c, snap);
       return 'stopped';
     }
-
-    // 自動重設：工作階段其實已經在進行（例如你用手機送過訊息）→ 不需要送
-    if (item.keepalive && sessionActive(snap)) {
-      log.info('keepalive skipped: session already active');
-      await bg(MSG.QUEUE_DELETE, { id: item.id });
-      return 'stopped';
-    }
-    if (item.keepalive) CQ.ui.toast(t('toastKeepalive'), { kind: 'info', duration: 8000 });
 
     // 你可能已經手動送出過相同內容（自動重設的專用對話裡本來就有很多相同訊息，不檢查）
     if (!item.keepalive && CQ.sender.findDuplicateInConversation(item.text)) {
@@ -379,6 +375,7 @@
   async function usageAllowsSend(c) {
     const fresh = await CQ.usageState.refresh({ timeout: TIMING.PRE_SEND_RECHECK_TIMEOUT_MS });
     const snap = fresh || CQ.usageState.current();
+    if (c.item.keepalive && CQ.session.hasApiData(snap)) return !(await keepaliveBlocked(c, snap));
     if (snap && snap.full === true && (!snap.resetAt || snap.resetAt > Date.now() || isStaleDomOnly(snap))) {
       await handleStillFull(c, snap);
       return false;
@@ -477,9 +474,29 @@
     await bg(MSG.QUEUE_REBIND, { group: item.newChatGroup, url });
   }
 
-  /** 工作階段正在進行中（API 回報的結束時間在未來） */
-  function sessionActive(snap) {
-    return !!(snap && snap.session && Number(snap.session.resetsAt) > Date.now());
+  /**
+   * 自動重設項目：用 API 資料判斷要不要送。回傳 true 代表已處理（流程應結束）。
+   *  - 工作階段已經在進行（例如你用手機送過訊息）→ 不需要送，移除
+   *  - 每週上限已滿 → 不送（SW 會移除並等每週重置）
+   *  - 讀不到 API → 退回頁面判斷：頁面明確顯示已滿就不送
+   */
+  async function keepaliveBlocked(c, snap) {
+    const check = CQ.session.keepaliveCheck(snap, {});
+    if (check.result === 'session-active') {
+      log.info('keepalive skipped: session already active');
+      await bg(MSG.QUEUE_DELETE, { id: c.item.id });
+      return true;
+    }
+    if (check.result === 'weekly-full') {
+      log.info('keepalive skipped: weekly limit full');
+      await release(c, 'waiting', { resetAt: check.endAt, resetEstimated: false });
+      return true;
+    }
+    if (check.result === 'no-usage-data' && snap && snap.full === true) {
+      await handleStillFull(c, snap);
+      return true;
+    }
+    return false;
   }
 
   /** 自動重設第一次在新對話送出 → 回報建立的對話網址，之後都送進這個專用對話 */

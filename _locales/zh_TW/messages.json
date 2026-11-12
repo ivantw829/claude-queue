@@ -430,5 +430,104 @@
   },
   "optDeveloper": {
     "message": "開發者"
+  },
+  "optSectionAutoReset": {
+    "message": "自動重設"
+  },
+  "optAutoReset": {
+    "message": "工作階段歸零時自動送出一則訊息"
+  },
+  "optAutoResetDesc": {
+    "message": "claude.ai 的 5 小時工作階段要等你送出第一則訊息才開始倒數。開啟後，每次工作階段結束就自動送出一則短訊息到一個專用對話，讓下一個工作階段馬上開始倒數。例如睡覺時開著，起床時目前的工作階段很快就會重置，可以連續用到兩個工作階段。"
+  },
+  "optAutoResetWarning": {
+    "message": "⚠ 注意：需要 Chrome 保持開啟、電腦不能睡眠（macOS 可在終端機執行 caffeinate -i，或在「電池／能源」設定中避免睡眠）、claude.ai 保持登入。送出時會自動開啟或切換到專用對話，並把 Chrome 視窗帶到最前面（白天也會）。每次送出會用掉少量額度。每週上限已滿時不會送出。連續失敗 3 次會暫停，直到你再次使用 Claude 或重新開啟此設定。"
+  },
+  "optAutoResetConfirm": {
+    "message": "確定要開啟「自動重設」嗎？\n\n每次 5 小時工作階段結束時，會自動在專用對話送出一則訊息，並把 Chrome 視窗帶到最前面。"
+  },
+  "optAutoResetText": {
+    "message": "要送出的訊息"
+  },
+  "optAutoResetTextDesc": {
+    "message": "越短越省額度（最多 200 字）"
+  },
+  "popupKeepaliveTag": {
+    "message": "自動重設"
+  },
+  "popupKeepaliveNext": {
+    "message": "自動重設：開啟 · 約 {time} 送出"
+  },
+  "popupKeepaliveIdle": {
+    "message": "自動重設：開啟 · 工作階段已歸零，等待送出"
+  },
+  "popupKeepalivePaused": {
+    "message": "自動重設：連續失敗，已暫停（再次使用 Claude 或重新開啟設定後恢復）"
+  },
+  "popupKeepaliveLastError": {
+    "message": "上次失敗：{reason}"
+  },
+  "toastKeepalive": {
+    "message": "自動重設：送出訊息讓下一個工作階段開始倒數"
+  },
+  "notifyKeepaliveFailedTitle": {
+    "message": "Claude Queue：自動重設未完成"
+  },
+  "notifyKeepaliveFailedBody": {
+    "message": "無法送出自動重設訊息（{reason}），稍後會再試一次。"
+  },
+  "notifyKeepalivePausedBody": {
+    "message": "自動重設連續失敗（{reason}），已暫停。再次使用 Claude 或重新開啟設定後會恢復。"
+  },
+  "popupKeepaliveWeeklyFull": {
+    "message": "自動重設：每週上限已滿，{time} 重置後再送"
+  },
+  "popupKeepaliveNoData": {
+    "message": "自動重設：讀不到用量資料，暫時無法判斷（請開著 claude.ai 分頁）"
+  },
+  "kaLastCheckNone": {
+    "message": "最後一次檢查：尚無紀錄（開著 claude.ai 分頁幾分鐘後就會有）"
+  },
+  "kaLastCheck": {
+    "message": "最後一次檢查：{time} · {result}"
+  },
+  "kaSessionEnd": {
+    "message": "工作階段 {time} 結束"
+  },
+  "kaLastSent": {
+    "message": "上次送出：{time}"
+  },
+  "kaResultTriggered": {
+    "message": "已送出自動重設訊息"
+  },
+  "kaResultSessionActive": {
+    "message": "工作階段進行中，結束後送出"
+  },
+  "kaResultRecentlySent": {
+    "message": "剛送過，等這個工作階段結束"
+  },
+  "kaResultWeeklyFull": {
+    "message": "每週上限已滿，不送"
+  },
+  "kaResultNoUsageData": {
+    "message": "讀不到用量資料，無法判斷"
+  },
+  "kaResultCooldown": {
+    "message": "10 分鐘內剛嘗試過，稍後再試"
+  },
+  "kaResultPaused": {
+    "message": "連續失敗 3 次，已暫停"
+  },
+  "kaResultQueueBusy": {
+    "message": "佇列的訊息正在送出，由它開始新的工作階段"
+  },
+  "kaResultAlreadyQueued": {
+    "message": "自動重設訊息已在處理中"
+  },
+  "kaResultDisabled": {
+    "message": "自動重設已關閉"
+  },
+  "kaResultUnknown": {
+    "message": "{result}"
   }
 }

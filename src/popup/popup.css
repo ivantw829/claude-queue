@@ -74,6 +74,8 @@ ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: col
 .badge.failed { background: var(--err); }
 .badge.sending { background: var(--warn); }
 .badge.draft { background: var(--muted); }
+.badge.keepalive { background: #6b7fd7; }
+.keepalive-status { margin-top: 4px; }
 .text { margin: 6px 0 4px; white-space: pre-wrap; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .editor { width: 100%; margin: 6px 0 4px; font: inherit; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
 .meta { color: var(--muted); }

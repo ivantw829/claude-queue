@@ -40,6 +40,27 @@
       </section>
 
       <section class="card">
+        <h2 data-i18n="optSectionAutoReset"></h2>
+        <label class="row">
+          <input type="checkbox" id="autoReset" />
+          <span>
+            <strong data-i18n="optAutoReset"></strong>
+            <span class="desc" data-i18n="optAutoResetDesc"></span>
+          </span>
+        </label>
+        <div class="danger-box" data-i18n="optAutoResetWarning"></div>
+
+        <label class="row">
+          <span class="grow">
+            <strong data-i18n="optAutoResetText"></strong>
+            <span class="desc" data-i18n="optAutoResetTextDesc"></span>
+          </span>
+          <input type="text" id="autoResetText" maxlength="200" />
+        </label>
+        <p class="muted small" id="keepaliveLastCheck"></p>
+      </section>
+
+      <section class="card">
         <h2 data-i18n="optSectionDebug"></h2>
         <label class="row">
           <input type="checkbox" id="debugLog" />
