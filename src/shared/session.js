@@ -61,5 +61,47 @@
     return { idle: true, result: 'idle', endAt: null };
   }
 
-  CQ.session = { hasApiData, isBlocking, sessionEndAt, keepaliveCheck };
+  /**
+   * 快照抓下來之後，有沒有哪個重置時間已經過了（快照已過時，要馬上重抓）。
+   * 例如 15:14 抓到「100%，15:15 重置」，15:15 之後這份快照就不準了。
+   * API 停在「100%＋已過去的 resets_at」時，那個時間早於抓取時間，不算過時，不會一直重抓。
+   */
+  function staleAfterReset(snap, now = Date.now()) {
+    if (!snap || !snap.fetchedAt) return false;
+    const times = [snap.resetAt, snap.session && snap.session.resetsAt, snap.weekly && snap.weekly.resetsAt];
+    return times.some((v) => {
+      const r = Number(v);
+      return r > snap.fetchedAt && r <= now;
+    });
+  }
+
+  /**
+   * Popup 顯示的自動重設狀態（依照 SW 實際會怎麼做，而不是只看用量）。
+   * opts：{ now, queue, alarmAt（cq-keepalive 的排程時間）, pollMs（用量輪詢間隔）, maxFails }
+   * @returns {{ kind: string, time: number|null }}
+   *   kind：paused / sending / next / weekly-full / no-data / queue-busy / cooldown / soon
+   */
+  function keepaliveStatus(snap, state = {}, opts = {}) {
+    const now = opts.now || Date.now();
+    const queue = opts.queue || [];
+    const maxFails = opts.maxFails || 3;
+    const T = CQ.TIMING || {};
+    if ((state.failCount || 0) >= maxFails) return { kind: 'paused', time: null };
+    if (queue.some((i) => i.keepalive)) return { kind: 'sending', time: null };
+    const c = keepaliveCheck(snap, state, now);
+    if (c.endAt && (c.result === 'session-active' || c.result === 'recently-sent')) {
+      return { kind: 'next', time: c.endAt + (T.KEEPALIVE_BUFFER_MS || 90 * 1000) };
+    }
+    if (c.result === 'weekly-full') return { kind: 'weekly-full', time: c.endAt };
+    if (c.result === 'no-usage-data') return { kind: 'no-data', time: null };
+    // 已歸零：SW 會在下一次收到用量（輪詢）或 alarm 時送出，除非被下面的情況擋住
+    if (queue.some((i) => i.claim || i.restoring)) return { kind: 'queue-busy', time: null };
+    const cooldownEnd = (state.lastAttemptAt || 0) + (T.KEEPALIVE_COOLDOWN_MS || 10 * 60 * 1000);
+    if (cooldownEnd > now) return { kind: 'cooldown', time: cooldownEnd };
+    const candidates = [opts.alarmAt, snap && snap.fetchedAt && opts.pollMs ? snap.fetchedAt + opts.pollMs : 0];
+    const next = candidates.filter((v) => Number(v) > now).sort((a, b) => a - b)[0];
+    return { kind: 'soon', time: next || null };
+  }
+
+  CQ.session = { hasApiData, isBlocking, sessionEndAt, keepaliveCheck, staleAfterReset, keepaliveStatus };
 })(globalThis);

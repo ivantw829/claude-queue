@@ -458,9 +458,6 @@
   "popupKeepaliveNext": {
     "message": "自動重設：開啟 · 約 {time} 送出"
   },
-  "popupKeepaliveIdle": {
-    "message": "自動重設：開啟 · 工作階段已歸零，等待送出"
-  },
   "popupKeepalivePaused": {
     "message": "自動重設：連續失敗，已暫停（再次使用 Claude 或重新開啟設定後恢復）"
   },
@@ -484,6 +481,24 @@
   },
   "popupKeepaliveNoData": {
     "message": "自動重設：讀不到用量資料，暫時無法判斷（請開著 claude.ai 分頁）"
+  },
+  "popupKeepaliveSoon": {
+    "message": "自動重設：開啟 · 工作階段已歸零，約 {time} 送出"
+  },
+  "popupKeepaliveSoonNoTime": {
+    "message": "自動重設：開啟 · 工作階段已歸零，即將送出"
+  },
+  "popupKeepaliveCooldown": {
+    "message": "自動重設：10 分鐘內剛嘗試過，約 {time} 再送"
+  },
+  "popupKeepaliveSending": {
+    "message": "自動重設：正在送出"
+  },
+  "popupKeepaliveQueueBusy": {
+    "message": "自動重設：佇列的訊息正在送出，由它開始新的工作階段"
+  },
+  "usageResetPassed": {
+    "message": "已到重置時間，正在更新用量…"
   },
   "kaLastCheckNone": {
     "message": "最後一次檢查：尚無紀錄（開著 claude.ai 分頁幾分鐘後就會有）"

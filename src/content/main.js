@@ -52,11 +52,18 @@
     return snapshot && snapshot.fetchedAt ? Date.now() - snapshot.fetchedAt : Infinity;
   }
 
+  let staleRefreshAt = 0;
+
   function pollTick() {
+    const now = Date.now();
     const interval = CQ.settings.get().pollMinutes * 60 * 1000;
     // 背景分頁多等 30 秒，讓前景分頁優先負責輪詢
     const threshold = document.hidden ? interval + 30000 : interval - 5000;
-    if (snapshotAge() >= threshold) CQ.usageState.refresh();
+    // 快照裡的重置時間已經過了 → 不等下一輪，馬上重抓（自動重設、等待中的訊息都靠它判斷）；最多每分鐘一次
+    const stale =
+      CQ.session.staleAfterReset(snapshot, now - (document.hidden ? 30000 : 0)) && now - staleRefreshAt > 60000;
+    if (stale) staleRefreshAt = now;
+    if (stale || snapshotAge() >= threshold) CQ.usageState.refresh();
   }
 
   // ───────────── 佇列快取（供手動送出比對） ─────────────
