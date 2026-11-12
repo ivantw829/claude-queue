@@ -10,6 +10,9 @@
   let usage = null;
   let keepalive = null; // 自動重設狀態
   let autoReset = false;
+  let pollMs = 2 * 60 * 1000; // 用量輪詢間隔（估計下次檢查時間用）
+  let alarmAt = null; // 自動重設 alarm 的排程時間
+  let staleRequestedAt = 0; // 上次因為快照過時而要求重抓的時間
   let sourceNote = ''; // 暫時提示（例如沒有開著的 claude.ai 分頁）
   const editing = new Set(); // 正在編輯的項目 id（重繪時保留狀態）
 
@@ -52,7 +55,10 @@
       source.textContent = sourceNote;
       return;
     }
-    if (usage.full === true) {
+    if (CQ.session.staleAfterReset(usage)) {
+      // 重置時間已經過了，但快照是之前抓的 → 不要再顯示「已滿」
+      status.textContent = t('usageResetPassed');
+    } else if (usage.full === true) {
       status.classList.add('full');
       status.textContent =
         t('usageFullUntil', {
@@ -249,26 +255,42 @@
     }
     el.hidden = false;
     const st = keepalive || {};
-    const now = Date.now();
-    let text;
-    const c = CQ.session.keepaliveCheck(usage, st, now);
-    if ((st.failCount || 0) >= 3) {
-      text = t('popupKeepalivePaused');
-    } else if (c.endAt && (c.result === 'session-active' || c.result === 'recently-sent')) {
-      text = t('popupKeepaliveNext', { time: formatClock(c.endAt + CQ.TIMING.KEEPALIVE_BUFFER_MS) });
-    } else if (c.result === 'weekly-full') {
-      text = t('popupKeepaliveWeeklyFull', { time: c.endAt ? formatClock(c.endAt) : '?' });
-    } else if (c.result === 'no-usage-data') {
-      text = t('popupKeepaliveNoData');
-    } else {
-      text = t('popupKeepaliveIdle');
-    }
+    const s = CQ.session.keepaliveStatus(usage, st, { queue, alarmAt, pollMs });
+    const time = s.time ? formatClock(s.time) : '?';
+    let text = {
+      paused: () => t('popupKeepalivePaused'),
+      sending: () => t('popupKeepaliveSending'),
+      next: () => t('popupKeepaliveNext', { time }),
+      'weekly-full': () => t('popupKeepaliveWeeklyFull', { time }),
+      'no-data': () => t('popupKeepaliveNoData'),
+      'queue-busy': () => t('popupKeepaliveQueueBusy'),
+      cooldown: () => t('popupKeepaliveCooldown', { time }),
+      soon: () => (s.time ? t('popupKeepaliveSoon', { time }) : t('popupKeepaliveSoonNoTime'))
+    }[s.kind]();
     if (st.lastError) text += ' · ' + t('popupKeepaliveLastError', { reason: errorText(st.lastError) });
     el.textContent = text;
   }
 
+  /** 快照的重置時間已經過了 → 請 SW 叫 claude.ai 分頁重抓（最多每 30 秒一次） */
+  function refreshIfStale() {
+    if (!CQ.session.staleAfterReset(usage) || Date.now() - staleRequestedAt < 30000) return;
+    staleRequestedAt = Date.now();
+    send(MSG.USAGE_REFRESH_REQUEST).catch(() => {});
+  }
+
+  async function loadAlarm() {
+    try {
+      const a = await chrome.alarms.get(CQ.ALARMS.KEEPALIVE);
+      alarmAt = a ? a.scheduledTime : null;
+    } catch (_) {
+      alarmAt = null;
+    }
+  }
+
   // 每秒只更新倒數文字，不整個重繪（避免打斷編輯）
   function tick() {
+    refreshIfStale();
+    if (autoReset) loadAlarm();
     renderUsage();
     renderKeepalive();
     document.querySelectorAll('.item .meta').forEach((meta) => {
@@ -302,6 +324,9 @@
     keepalive = data[K.KEEPALIVE] || null;
     const settings = await CQ.settings.load();
     autoReset = settings.autoReset;
+    pollMs = settings.pollMinutes * 60 * 1000;
+    await loadAlarm();
+    refreshIfStale();
     document.getElementById('autoSendWarning').hidden = !settings.autoSend;
     renderKeepalive();
     renderUsage();
@@ -322,6 +347,7 @@
         const ns = changes[K.SETTINGS].newValue || {};
         document.getElementById('autoSendWarning').hidden = !ns.autoSend;
         autoReset = !!ns.autoReset;
+        if (ns.pollMinutes) pollMs = ns.pollMinutes * 60 * 1000;
         renderKeepalive();
       }
       if (changes[K.KEEPALIVE]) {
