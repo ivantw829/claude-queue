@@ -377,3 +377,45 @@ test('real API: a past resets_at from before the last send does not cancel the 5
   assert.equal(env.keepaliveItems().length, 0);
   assert.equal(env.store.keepalive.lastCheck.result, 'recently-sent');
 });
+
+// 實測 log（2026-11-20）：03:51 送出 → API 說 08:50 結束 → 08:50 歸零後 API 回 null，
+// 原本要等到 08:51:38（lastSentAt + 5h）之後的下一次輪詢才送
+test('session the last send started has ended per the API (lastKnownEnd) → sends without waiting for lastSentAt + 5h', async () => {
+  const env = createEnv();
+  await env.ready;
+  env.clock.now = T0 + 1 * MIN + 38 * 1000; // 送出時間不在整 10 分鐘
+  await env.pushSnapshot(env.snap({ five_hour: null, seven_day: weekly(env.clock.now) }));
+  const it = env.keepaliveItems()[0];
+  const claim = await env.send({ type: env.MSG.QUEUE_CLAIM, id: it.id });
+  await env.send({ type: env.MSG.QUEUE_MARK_SENT, id: it.id, token: claim.token, confidence: 'strong' });
+  const sentAt = env.store.keepalive.lastSentAt;
+
+  // 工作階段進行中：API 給的結束時間對齊到 10 分鐘，比 lastSentAt + 5h 早
+  const end = T0 + 5 * H;
+  env.clock.now = sentAt + 2 * MIN;
+  await env.pushSnapshot(env.snap({ five_hour: { utilization: 1, resets_at: iso(end) }, seven_day: weekly(env.clock.now) }));
+  assert.equal(env.store.keepalive.lastKnownEnd, end);
+
+  env.clock.now = end + 3 * 1000;
+  assert.ok(env.clock.now < sentAt + 5 * H, 'still inside the old 5h estimate');
+  await env.pushSnapshot(env.snap({ five_hour: null, seven_day: weekly(env.clock.now) }));
+  assert.equal(env.keepaliveItems().length, 1, 'sends right after the known end');
+  assert.equal(env.store.keepalive.lastCheck.result, 'triggered');
+});
+
+test('lastKnownEnd from before the last send does not cancel the 5h guard', async () => {
+  const env = createEnv();
+  await env.ready;
+  // 先看過一個進行中的工作階段（結束時間 T0 + 1h）
+  await env.pushSnapshot(env.snap({ five_hour: { utilization: 50, resets_at: iso(T0 + 1 * H) }, seven_day: weekly(T0) }));
+  env.clock.now = T0 + 1 * H + 2 * MIN;
+  await env.pushSnapshot(env.snap({ five_hour: null, seven_day: weekly(env.clock.now) }));
+  const it = env.keepaliveItems()[0];
+  const claim = await env.send({ type: env.MSG.QUEUE_CLAIM, id: it.id });
+  await env.send({ type: env.MSG.QUEUE_MARK_SENT, id: it.id, token: claim.token, confidence: 'strong' });
+  // 送出後 API 一直回 null，lastKnownEnd 還是送出前的那個
+  env.clock.now += 30 * MIN;
+  await env.pushSnapshot(env.snap({ five_hour: null, seven_day: weekly(env.clock.now) }));
+  assert.equal(env.keepaliveItems().length, 0);
+  assert.equal(env.store.keepalive.lastCheck.result, 'recently-sent');
+});

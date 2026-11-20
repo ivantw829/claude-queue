@@ -60,6 +60,23 @@
     }
   }
 
+  /**
+   * 給 debug log 用的網址類型：只留路徑結構，ID 換成 :id（例如 /chat/:id、/project/:id、/new）。
+   * 不含 query、hash 與對話 ID。
+   */
+  function urlShape(url) {
+    try {
+      const u = new URL(url, 'https://claude.ai');
+      const parts = u.pathname
+        .split('/')
+        .filter(Boolean)
+        .map((s) => (s.length >= 8 && /\d/.test(s)) || s.length > 32 ? ':id' : s);
+      return (u.origin === 'https://claude.ai' ? '' : 'other:') + '/' + parts.join('/');
+    } catch (_) {
+      return 'invalid';
+    }
+  }
+
   function isNewChatUrl(url) {
     try {
       const p = new URL(url, 'https://claude.ai').pathname;
@@ -95,6 +112,7 @@
     stripMarkdown,
     renderedMatches,
     conversationKey,
+    urlShape,
     isNewChatUrl,
     uuid,
     preview

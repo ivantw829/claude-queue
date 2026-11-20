@@ -11,10 +11,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
-const ctx = {};
+const ctx = { URL };
 ctx.globalThis = ctx;
 vm.createContext(ctx);
-for (const f of ['src/shared/constants.js', 'src/shared/session.js']) {
+for (const f of ['src/shared/constants.js', 'src/shared/text.js', 'src/shared/session.js']) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
 }
 const S = ctx.CQ.session;
@@ -86,4 +86,14 @@ test('popup status: active session → next at end + 90s; paused after 3 failure
 test('popup status: no API data → no-data', () => {
   const dom = { source: 'dom', full: true, session: null, weekly: null, resetAt: T + H, fetchedAt: T };
   assert.equal(S.keepaliveStatus(dom, {}, { now: T }).kind, 'no-data');
+});
+
+test('urlShape: keeps the path structure, never the conversation id', () => {
+  const U = ctx.CQ.text.urlShape;
+  assert.equal(U('https://claude.ai/chat/3f1c2a9e-1b2c-4d5e-8f90-123456789abc?x=1#y'), '/chat/:id');
+  assert.equal(U('https://claude.ai/new'), '/new');
+  assert.equal(U('https://claude.ai/'), '/');
+  assert.equal(U('https://claude.ai/project/0199aa11-2233-7445-8899-aabbccddeeff'), '/project/:id');
+  assert.equal(U('https://claude.ai/recents'), '/recents');
+  assert.equal(U('https://example.com/chat/abc'), 'other:/chat/abc');
 });

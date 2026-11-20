@@ -196,7 +196,11 @@
 
     // 不是原對話（分頁被切到別的對話、對話已刪除被導向 /new…）
     if (!inTargetConversation(c)) {
-      log.warn('conversation url mismatch', { expectedNew: CQ.text.isNewChatUrl(item.url) });
+      log.warn('conversation url mismatch', {
+        expectedNew: CQ.text.isNewChatUrl(item.url),
+        expected: CQ.text.urlShape(item.url),
+        actual: CQ.text.urlShape(location.href)
+      });
       if (auto) {
         await reopen(c);
         return 'stopped';

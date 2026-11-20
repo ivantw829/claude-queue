@@ -114,7 +114,7 @@
     setInterval(() => {
       if (location.href !== lastUrl) {
         lastUrl = location.href;
-        log.debug('url changed');
+        log.debug('url changed', { to: CQ.text.urlShape(location.href) });
         CQ.interceptor.onNavigate();
         CQ.attachments.reset();
         CQ.restore.onNavigate(); // 還原中離開原對話 → 中止，不會送到別的對話
