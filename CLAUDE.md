@@ -17,8 +17,9 @@ for f in $(find src -name '*.js'); do node --check "$f"; done   # syntax check
 python3 -m http.server 8765                         # then open http://localhost:8765/test/harness/index.html
 ```
 
-- `test/sw.test.js` loads the real `service-worker.js` into a `vm` context with in-memory `chrome.*` stubs. `test/helpers/sw-env.js` is the same environment as a reusable helper (used by `test/attachments.test.js`).
+- `test/sw.test.js` loads the real `service-worker.js` into a `vm` context with in-memory `chrome.*` stubs. `test/helpers/sw-env.js` is the same environment as a reusable helper (used by `test/attachments.test.js` and `test/update.test.js`; its `fetch` throws unless a test passes one, and `installType`/`version` are options). `test/keepalive.test.js` has its own env with a fake clock. Top-level function declarations in the SW become globals of the `vm` context, so tests can call them directly (`env.ctx.checkForUpdate(...)`). The SW also runs `reconcile()` once at load, so startup work can race with a test's own `onStartup` call.
 - `test/harness/index.html` runs the real content scripts against a fake claude.ai page with a real ProseMirror editor (also startable as the `harness` config in `.claude/launch.json`). A full run takes about 2 minutes; every case should show PASS at the bottom of the page and `window.__done` becomes true. The browser caches the scripts, so after editing them reload with the cache bypassed or you will test stale code. Synthetic events are not `isTrusted`, so the harness drives capture and interception through the test-only hooks `CQ.attachments._record` and `CQ.interceptor._handleSendAttempt`.
+- Popup and options pages call `chrome.*` at load, so they cannot be opened directly in a normal browser tab; previewing them needs a page that defines a `chrome` stub first (none is committed).
 - Load the extension in Chrome via `chrome://extensions` → Developer mode → Load unpacked (pick the repo root), then reload any open claude.ai tabs.
 - `TESTING.md` has the manual checklist. It also explains how to simulate "usage full": settings page → 模擬用量已滿.
 
@@ -70,6 +71,12 @@ Whether to send an auto-reset message is decided by `CQ.session.keepaliveCheck()
 - Snapshots are stored in `usage` and shared by all tabs. The foreground tab polls first.
 
 The `interceptor.js` blocking decision must be synchronous (`preventDefault`), so it relies on the latest snapshot plus the page's limit banner.
+
+**Versions and the user guide** (`src/shared/version.js`, `checkForUpdate` / `handleInstalled` in the SW):
+- Unpacked installs never auto-update, so the SW reads `manifest.json` from GitHub `main` once a day (alarm `cq-update-check`), notifies once per new version (`notifiedVersion`), and the popup shows a notice until dismissed (`UPDATE_DISMISS`). State lives in the `update` storage key. Store installs (`chrome.management.getSelf().installType !== 'development'`) skip all of this.
+- `onInstalled` with reason `install` opens the guide (`CQ.version.GUIDE_URL`); reason `update` with a higher version sets `updatedFrom` for the popup's "已更新到" notice. Reloading in developer mode fires `update` with the same version, which is ignored.
+- The guide is published at https://me.asdtw.org/articles/claude-queue-guide.html (built from `GUIDE.md`, maintained on the user's site, not in this repo). Notifications link to its `#s12` anchor (section 12, updating), so that anchor must stay.
+- Releasing: feature branches are merged into `main` locally (`--no-ff`), then `main` is pushed. Bump `manifest.json` `version` in the same push, or users will not be notified.
 
 ## Fragile parts (claude.ai changes)
 
