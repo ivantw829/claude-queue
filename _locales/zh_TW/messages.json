@@ -452,6 +452,57 @@
   "optAutoResetTextDesc": {
     "message": "越短越省額度（最多 200 字）"
   },
+  "optAutoResetModel": {
+    "message": "使用的模型"
+  },
+  "optAutoResetModelDesc": {
+    "message": "送出前在專用對話的模型選單切換，只影響這個對話，不會改到你平常的預設模型。專用對話剛建立的那一則會用目前的模型送出，之後才會切換。切換失敗時照樣用目前的模型送出。"
+  },
+  "optModelHaiku": {
+    "message": "Haiku（最省額度）"
+  },
+  "optModelSonnet": {
+    "message": "Sonnet"
+  },
+  "optModelOpus": {
+    "message": "Opus"
+  },
+  "optModelNone": {
+    "message": "不切換"
+  },
+  "optAutoResetEffort": {
+    "message": "投入程度"
+  },
+  "optAutoResetEffortDesc": {
+    "message": "對應 claude.ai 模型選單中的「投入程度」"
+  },
+  "optEffortLow": {
+    "message": "低"
+  },
+  "optEffortMedium": {
+    "message": "中"
+  },
+  "optEffortHigh": {
+    "message": "高"
+  },
+  "optEffortXhigh": {
+    "message": "超高"
+  },
+  "optEffortMax": {
+    "message": "最高"
+  },
+  "optEffortNone": {
+    "message": "不調整"
+  },
+  "kaModelOk": {
+    "message": "模型：{model}"
+  },
+  "kaModelNewChat": {
+    "message": "模型：新的專用對話先用目前模型送出，下次切換"
+  },
+  "kaModelFailed": {
+    "message": "模型切換失敗（{reason}），已用目前模型送出"
+  },
   "popupKeepaliveTag": {
     "message": "自動重設"
   },

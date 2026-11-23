@@ -101,6 +101,17 @@
       'input[type="file"]:not([webkitdirectory])'
     ],
 
+    // 輸入區的模型選單按鈕（自動重設用來切換模型）
+    // 2026-11 實測：<button data-testid="model-selector-dropdown" aria-haspopup="menu" aria-label="模型：Opus 5.5 高">，
+    // Base UI 選單：要送 pointerdown → mousedown → pointerup → mouseup → click 才會打開（單一 click 不會）。
+    // 選單是 [role="menu"]，模型是 menuitemradio（aria-checked）；投入程度、更多模型是 aria-haspopup="menu" 的子選單。
+    // 在新對話（/new）切換會改到全域預設模型；在既有對話只改該對話
+    modelSelector: [
+      'button[data-testid="model-selector-dropdown"]',
+      'button[aria-haspopup="menu"][aria-label^="模型"]',
+      'button[aria-haspopup="menu"][aria-label^="Model" i]'
+    ],
+
     // 對話中「使用者的訊息」氣泡（用於確認送出成功、偵測重複）
     userMessage: [
       '[data-testid="user-message"]',

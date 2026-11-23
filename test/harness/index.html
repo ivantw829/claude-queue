@@ -75,6 +75,7 @@
 <script src="/src/content/selectors.js"></script>
 <script src="/src/content/usage.js"></script>
 <script src="/src/content/editor.js"></script>
+<script src="/src/content/model.js"></script>
 <script src="/src/content/attachments.js"></script>
 <script src="/src/content/ui.js"></script>
 <script src="/src/content/sender.js"></script>
@@ -156,6 +157,53 @@
     if (e.key === 'Enter' && !e.shiftKey && fake.mode !== 'ignore') { e.preventDefault(); doSend(); }
   });
 
+  // ── 假的模型選單（結構同 2026-11 實測的既有對話：主選單只有目前模型，其他在「更多模型」子選單）──
+  // fake.picker = { model: 'Opus 5.5', efforts: { 'Opus 5.5': 2 }, models: [...] } 或 null（沒有選單）
+  const EFFORT_LABELS = ['低', '中', '高', '超高', '最高'];
+  const pickerBtn = document.createElement('button');
+  pickerBtn.type = 'button';
+  pickerBtn.dataset.testid = 'model-selector-dropdown';
+  pickerBtn.setAttribute('aria-haspopup', 'menu');
+  function pickerEffort(p) { return p.efforts[p.model] ?? 1; }
+  function syncPicker() {
+    const p = fake.picker;
+    if (!p) return pickerBtn.remove();
+    if (!pickerBtn.isConnected) document.querySelector('fieldset').appendChild(pickerBtn);
+    const l = p.model + ' ' + EFFORT_LABELS[pickerEffort(p)];
+    pickerBtn.textContent = l;
+    pickerBtn.setAttribute('aria-label', '模型：' + l);
+  }
+  function closePicker() { document.querySelectorAll('[role=menu]').forEach((m) => m.remove()); }
+  function menuEl() { const m = document.createElement('div'); m.setAttribute('role', 'menu'); document.body.appendChild(m); return m; }
+  function radio(menu, text, checked, onPick) {
+    const e = document.createElement('div');
+    e.setAttribute('role', 'menuitemradio');
+    e.setAttribute('aria-checked', String(checked));
+    e.textContent = text;
+    e.addEventListener('click', () => { onPick(); closePicker(); syncPicker(); });
+    menu.appendChild(e);
+  }
+  function subTrigger(menu, text, build) {
+    const e = document.createElement('div');
+    e.setAttribute('role', 'menuitem');
+    e.setAttribute('aria-haspopup', 'menu');
+    e.textContent = text;
+    e.addEventListener('click', () => build(menuEl()));
+    menu.appendChild(e);
+  }
+  pickerBtn.addEventListener('click', () => {
+    const p = fake.picker;
+    if (document.querySelector('[role=menu]')) return closePicker();
+    const main = menuEl();
+    radio(main, p.model + '目前模型', true, () => {});
+    subTrigger(main, '投入程度' + EFFORT_LABELS[pickerEffort(p)], (m) =>
+      EFFORT_LABELS.forEach((l, i) => radio(m, l, i === pickerEffort(p), () => (p.efforts[p.model] = i))));
+    subTrigger(main, '更多模型', (m) =>
+      p.models.filter((x) => x !== p.model).forEach((x) => radio(m, x, false, () => (p.model = x))));
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePicker(); });
+  const defaultPicker = () => ({ model: 'Opus 5.5', efforts: { 'Opus 5.5': 2 }, models: ['Opus 5.5', 'Haiku 5.5', 'Sonnet 5.5'] });
+
   // 用量：API 結果由測試指定，DOM 判斷用真正的 detectLimitFromDom
   window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
   CQ.usage.getStatus = async () => CQ.usage.buildSnapshot(window.__api, CQ.usage.detectLimitFromDom(), null);
@@ -174,6 +222,9 @@
     fake.mode = mode;
     fake.attachMode = 'normal';
     fake.lastSentFiles = null;
+    fake.picker = null;
+    closePicker();
+    syncPicker();
     atts.innerHTML = '';
     window.__swReply = {};
     window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
@@ -327,6 +378,78 @@
       window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
       const b = call('keepalive:bound');
       return { pass: lastMsg() === 'Hello World!' && b && /\/chat\/new123$/.test(b.url), types: types() };
+    },
+    async keepaliveSwitchesModel() {
+      await reset('/chat/aaa');
+      fake.picker = defaultPicker();
+      syncPicker();
+      window.__api = { session: null, weekly: { pct: 30 }, extras: [] };
+      CQ.restore.start(item({ text: 'Hello World!', keepalive: true }), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      const r = call('keepalive:model');
+      const label = pickerBtn.getAttribute('aria-label');
+      return {
+        pass: lastMsg() === 'Hello World!' && r && r.ok === true && label === '模型：Haiku 5.5 中' && !document.querySelector('[role=menu]'),
+        label, r, types: types()
+      };
+    },
+    async keepaliveAlreadyHaikuSetsEffort() {
+      await reset('/chat/aaa');
+      fake.picker = { ...defaultPicker(), model: 'Haiku 5.5', efforts: { 'Haiku 5.5': 3 } };
+      syncPicker();
+      window.__api = { session: null, weekly: { pct: 30 }, extras: [] };
+      CQ.restore.start(item({ text: 'Hello World!', keepalive: true }), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      const r = call('keepalive:model');
+      const label = pickerBtn.getAttribute('aria-label');
+      return { pass: lastMsg() === 'Hello World!' && r && r.ok && label === '模型：Haiku 5.5 中', label, types: types() };
+    },
+    async keepaliveModelMissingStillSends() {
+      await reset('/chat/aaa');
+      fake.picker = { ...defaultPicker(), models: ['Opus 5.5', 'Sonnet 5.5'] };
+      syncPicker();
+      window.__api = { session: null, weekly: { pct: 30 }, extras: [] };
+      CQ.restore.start(item({ text: 'Hello World!', keepalive: true }), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      const r = call('keepalive:model');
+      return {
+        pass: lastMsg() === 'Hello World!' && !!call('queue:markSent') && r && r.ok === false && r.reason === 'model-not-found' && !document.querySelector('[role=menu]'),
+        r, types: types()
+      };
+    },
+    async keepaliveNoPickerStillSends() {
+      await reset('/chat/aaa');
+      window.__api = { session: null, weekly: { pct: 30 }, extras: [] };
+      CQ.restore.start(item({ text: 'Hello World!', keepalive: true }), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      const r = call('keepalive:model');
+      return { pass: lastMsg() === 'Hello World!' && r && r.reason === 'no-selector', r, types: types() };
+    },
+    async keepaliveNewChatDoesNotSwitch() {
+      // 在 /new 切換會改到全域預設模型 → 不切
+      await reset('/new');
+      fake.picker = defaultPicker();
+      syncPicker();
+      window.__api = { session: null, weekly: { pct: 30 }, extras: [] };
+      CQ.restore.start(item({ text: 'Hello World!', keepalive: true, url: origin + '/new' }), 'auto');
+      await waitIdle();
+      window.__api = { session: { pct: 10 }, weekly: { pct: 10 }, extras: [] };
+      const r = call('keepalive:model');
+      const label = pickerBtn.getAttribute('aria-label');
+      return { pass: lastMsg() === 'Hello World!' && r && r.reason === 'new-chat' && label === '模型：Opus 5.5 高', label, types: types() };
+    },
+    async regularItemDoesNotTouchModel() {
+      await reset('/chat/aaa');
+      fake.picker = defaultPicker();
+      syncPicker();
+      CQ.restore.start(item(), 'auto');
+      await waitIdle();
+      const label = pickerBtn.getAttribute('aria-label');
+      return { pass: lastMsg() === 'hello world' && !call('keepalive:model') && label === '模型：Opus 5.5 高', label, types: types() };
     },
     // ── 附件 ──
     async collectMatchesTracked() {
