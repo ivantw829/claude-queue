@@ -87,6 +87,7 @@
     RESTORE_GIVE_UP: 'restore:giveUp', // 自動送出無法完成 → 標記失敗並通知
     QUEUE_REBIND: 'queue:rebind', // 新對話群組：把後續項目改指向剛建立的對話
     KEEPALIVE_BOUND: 'keepalive:bound', // 自動重設：回報專用對話的網址
+    KEEPALIVE_MODEL_RESULT: 'keepalive:model', // 自動重設：回報送出前切換模型的結果
     USAGE_SNAPSHOT: 'usage:snapshot',
     USAGE_REFRESH_REQUEST: 'usage:refreshRequest',
     CLEAR_ALL: 'data:clearAll',

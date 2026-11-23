@@ -1328,6 +1328,18 @@ const handlers = {
     return { ok: true };
   },
 
+  async [MSG.KEEPALIVE_MODEL_RESULT]({ ok, reason, model }) {
+    const lastModelSwitch = {
+      at: Date.now(),
+      ok: !!ok,
+      reason: typeof reason === 'string' ? reason.slice(0, 40) : null,
+      model: typeof model === 'string' ? model.slice(0, 60) : null
+    };
+    await setKeepaliveState({ lastModelSwitch });
+    log.info('keepalive model result', { ok: lastModelSwitch.ok, reason: lastModelSwitch.reason });
+    return { ok: true };
+  },
+
   async [MSG.USAGE_REFRESH_REQUEST]() {
     const snapshot = await requestUsageFromTab();
     return { snapshot, noTab: !snapshot };

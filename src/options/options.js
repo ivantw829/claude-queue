@@ -27,6 +27,8 @@
     $('updateCheck').checked = s.updateCheck;
     $('autoReset').checked = s.autoReset;
     if (document.activeElement !== $('autoResetText')) $('autoResetText').value = s.autoResetText;
+    $('autoResetModel').value = s.autoResetModel;
+    $('autoResetEffort').value = s.autoResetEffort;
     $('pollMinutes').value = s.pollMinutes;
     $('debugLog').checked = s.debugLog;
     $('debugSimulate').checked = s.debugSimulate;
@@ -68,6 +70,8 @@
     save({ autoReset: e.target.checked });
   });
   $('autoResetText').addEventListener('change', (e) => save({ autoResetText: e.target.value }));
+  $('autoResetModel').addEventListener('change', (e) => save({ autoResetModel: e.target.value }));
+  $('autoResetEffort').addEventListener('change', (e) => save({ autoResetEffort: e.target.value }));
   $('notifications').addEventListener('change', (e) => save({ notifications: e.target.checked }));
   $('updateCheck').addEventListener('change', (e) => save({ updateCheck: e.target.checked }));
   $('pollMinutes').addEventListener('change', (e) => save({ pollMinutes: Number(e.target.value) }));
@@ -104,6 +108,8 @@
     disabled: 'kaResultDisabled'
   };
 
+  const MODEL_FAIL_KEYS = { 'new-chat': 'kaModelNewChat' };
+
   function renderKeepaliveCheck(st) {
     const el = $('keepaliveLastCheck');
     const c = st && st.lastCheck;
@@ -117,6 +123,14 @@
     });
     if (c.endAt) text += ' · ' + t('kaSessionEnd', { time: CQ.i18n.formatClock(c.endAt) });
     if (st.lastSentAt) text += ' · ' + t('kaLastSent', { time: new Date(st.lastSentAt).toLocaleString() });
+    const m = st.lastModelSwitch;
+    if (m) {
+      text +=
+        ' · ' +
+        (m.ok
+          ? t('kaModelOk', { model: m.model || '' })
+          : t(MODEL_FAIL_KEYS[m.reason] || 'kaModelFailed', { reason: m.reason || '', model: m.model || '' }));
+    }
     el.textContent = text;
   }
 

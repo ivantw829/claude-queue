@@ -298,6 +298,8 @@
       }
     }
 
+    if (item.keepalive) await switchKeepaliveModel();
+
     // 把附件加回去並等上傳完成（倒數要在這之後才開始）
     if ((item.attachments || []).length) {
       const r = await restoreAttachments(c);
@@ -649,6 +651,25 @@
       return true;
     }
     return false;
+  }
+
+  /**
+   * 自動重設送出前，把專用對話的模型切到設定值（預設 Haiku／中）。
+   * 在新對話（/new）切換會改到你的全域預設模型，所以不切：第一則用目前模型送出，
+   * 之後專用對話建立了，下一次就會在對話裡切換（只影響這個對話）。
+   * 切換失敗不中止，照樣用目前模型送出。
+   */
+  async function switchKeepaliveModel() {
+    const s = CQ.settings.get();
+    if (s.autoResetModel === 'none' && s.autoResetEffort === 'none') return;
+    let res;
+    if (CQ.text.isNewChatUrl(location.href)) {
+      res = { ok: false, changed: false, reason: 'new-chat' };
+    } else {
+      res = await CQ.model.ensure({ model: s.autoResetModel, effort: s.autoResetEffort });
+    }
+    log.info('keepalive model', { ok: res.ok, changed: res.changed, reason: res.reason || null });
+    await bg(MSG.KEEPALIVE_MODEL_RESULT, { ok: res.ok, reason: res.reason || null, model: CQ.model.label() });
   }
 
   /** 自動重設第一次在新對話送出 → 回報建立的對話網址，之後都送進這個專用對話 */
