@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ivantw829.github.io/claude-queue/sitemap.xml

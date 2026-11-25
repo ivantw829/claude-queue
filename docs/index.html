@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Primary SEO Meta Tags -->
+  <title>Claude Queue — claude.ai 用量上限自動排隊與額度重置提醒 Chrome 擴充功能</title>
+  <meta name="title" content="Claude Queue — claude.ai 用量上限自動排隊與額度重置提醒 Chrome 擴充功能">
+  <meta name="description" content="claude.ai 達到 5 小時或每週用量上限時，自動將訊息與圖片、PDF 附件存入本機佇列；額度重置後發出桌面通知並自動填回原對話，支援選用自動送出與睡前自動重設工作階段。100% 本機運作、免費開源。">
+  <meta name="keywords" content="Claude Queue, claude.ai, Chrome 擴充功能, Claude 用量上限, 訊息排隊, 額度重置通知, 自動重設, Anthropic Claude, Chrome Extension, 開源工具">
+  <meta name="author" content="ivantw829">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <link rel="canonical" href="https://ivantw829.github.io/claude-queue/">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1b19" media="(prefers-color-scheme: dark)">
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="128x128" href="./assets/icon128.png">
+  <link rel="apple-touch-icon" href="./assets/icon128.png">
+
+  <!-- Open Graph / Facebook / LINE / Discord -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://ivantw829.github.io/claude-queue/">
+  <meta property="og:site_name" content="Claude Queue">
+  <meta property="og:locale" content="zh_TW">
+  <meta property="og:title" content="Claude Queue — claude.ai 用量滿了？先排隊，重置後自動送出">
+  <meta property="og:description" content="claude.ai 達 5 小時或每週上限時，自動保存訊息與附件至本機佇列，額度恢復後即時通知並填回原對話。支援睡前自動重設工作階段，免費開源、100% 本機運作。">
+  <meta property="og:image" content="https://ivantw829.github.io/claude-queue/assets/og-image.png">
+  <meta property="og:image:secure_url" content="https://ivantw829.github.io/claude-queue/assets/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Claude Queue Chrome 擴充功能預覽：顯示 5 小時與每週用量條、等待重置的排隊訊息與 PDF 附件卡片">
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://ivantw829.github.io/claude-queue/">
+  <meta name="twitter:title" content="Claude Queue — claude.ai 用量滿了？先排隊，重置後自動送出">
+  <meta name="twitter:description" content="claude.ai 達上限時自動保存訊息與附件，額度恢復後桌面通知並填回原對話。100% 本機儲存、免費開源的 Chrome 擴充功能。">
+  <meta name="twitter:image" content="https://ivantw829.github.io/claude-queue/assets/og-image.png">
+  <meta name="twitter:image:alt" content="Claude Queue Chrome 擴充功能介面預覽">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="./styles.css">
+
+  <!-- Prevent flash of wrong theme -->
+  <script>
+    (function () {
+      var saved = localStorage.getItem('claude-queue-docs-theme');
+      var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    })();
+  </script>
+
+  <!-- JSON-LD Structured Data: SoftwareApplication + FAQPage + HowTo -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "Claude Queue",
+        "alternateName": "Claude Queue Chrome Extension",
+        "applicationCategory": "BrowserApplication",
+        "operatingSystem": "Chrome 116+ (macOS, Windows, Linux)",
+        "softwareVersion": "0.4.0",
+        "inLanguage": "zh-TW",
+        "url": "https://ivantw829.github.io/claude-queue/",
+        "downloadUrl": "https://github.com/ivantw829/claude-queue",
+        "codeRepository": "https://github.com/ivantw829/claude-queue",
+        "license": "https://opensource.org/licenses/MIT",
+        "image": "https://ivantw829.github.io/claude-queue/assets/og-image.png",
+        "description": "claude.ai 用量達上限（5 小時 session 上限或每週上限）時，自動把你要送出的訊息與本機附件存入佇列，等額度重置後發出桌面通知並協助填回原對話送出。",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "TWD"
+        },
+        "featureList": [
+          "用量未滿時零干擾",
+          "文字與圖片/PDF 本機附件排隊",
+          "額度重置桌面通知與自動填回原對話",
+          "選用重置後自動送出（附 3 秒取消倒數）",
+          "選用睡前自動重設 5 小時工作階段",
+          "100% 本機儲存，不上傳任何資料"
+        ]
+      },
+      {
+        "@type": "HowTo",
+        "name": "如何安裝 Claude Queue 到 Google Chrome",
+        "description": "透過 Chrome 開發人員模式的載入未封裝項目，5 分鐘內完成 Claude Queue 安裝。",
+        "totalTime": "PT5M",
+        "step": [
+          {
+            "@type": "HowToStep",
+            "name": "下載原始碼",
+            "text": "前往 GitHub 專案頁面下載 ZIP 並解壓縮至固定資料夾，或使用 git clone 下載。"
+          },
+          {
+            "@type": "HowToStep",
+            "name": "開啟 Chrome 擴充功能頁",
+            "text": "在 Chrome 網址列輸入 chrome://extensions，開啟右上角的「開發人員模式」。"
+          },
+          {
+            "@type": "HowToStep",
+            "name": "載入未封裝項目",
+            "text": "點擊「載入未封裝項目」，選擇包含 manifest.json 的專案資料夾。"
+          },
+          {
+            "@type": "HowToStep",
+            "name": "釘選圖示並重新整理 claude.ai",
+            "text": "將 Claude Queue 釘選到工具列，並重新整理已經開啟的 claude.ai 分頁即可使用。"
+          }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "這會讓我多用額度或繞過限制嗎？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "不會。它只是在你被擋的時候把訊息存起來，等額度恢復後再透過頁面上的送出按鈕送出，跟你自己晚點回來貼上送出完全一樣。它不會呼叫 claude.ai 的聊天 API，也不會重放任何請求。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "我的訊息會被傳到哪裡？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "哪裡都不會。佇列只存在你自己 Chrome 的 chrome.storage.local（附件在擴充功能的 IndexedDB），重置後透過 claude.ai 頁面本身送出。沒有外部伺服器，不上傳任何資料。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "可以傳檔案或圖片嗎？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "可以。用量已滿時，你從電腦加入的檔案（選檔、拖放、貼上圖片）會連同文字一起排隊，重置後自動加回輸入區並等上傳完成才送出。Google Drive 等連接附件與長文字貼上轉成的附件無法保存。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "電腦睡眠或 Chrome 關閉時會怎樣？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Chrome 關閉時無法通知。下次開啟 Chrome 時，擴充功能會依佇列重建排程；如果重置時間已經過了，會立刻檢查並通知你。電腦睡眠中錯過的排程，醒來後也會補觸發。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "支援 Claude 桌面 App、行動版或 Claude Code 嗎？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "不支援，只支援 claude.ai 網頁版（含 Projects）。支援 Google Chrome 116 以上版本，Edge、Brave、Arc 等 Chromium 系瀏覽器理論上亦可安裝。"
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">跳至主要內容</a>
+
+  <!-- Sticky Navigation -->
+  <header class="site-header">
+    <div class="container nav-inner">
+      <a href="#" class="brand" aria-label="Claude Queue 首頁">
+        <img src="./assets/favicon.svg" alt="" class="brand-icon" width="32" height="32">
+        <span>Claude Queue</span>
+        <span class="version-tag">v0.4.0</span>
+      </a>
+
+      <nav aria-label="主要導覽">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="#how-it-works">運作流程</a></li>
+          <li><a href="#features">核心特色</a></li>
+          <li><a href="#install">安裝教學</a></li>
+          <li><a href="#advanced">進階功能</a></li>
+          <li><a href="#privacy">隱私安全</a></li>
+          <li><a href="#faq">常見問題</a></li>
+        </ul>
+      </nav>
+
+      <div class="nav-actions">
+        <a href="https://github.com/ivantw829/claude-queue" class="icon-btn" target="_blank" rel="noopener noreferrer" aria-label="GitHub 專案頁面" title="GitHub">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.57.1.78-.25.78-.55v-1.94c-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11.02 11.02 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.41-2.69 5.39-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.66.79.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/>
+          </svg>
+        </a>
+        <button type="button" id="theme-toggle" class="icon-btn" aria-label="切換深淺色主題" title="切換主題">🌙</button>
+        <button type="button" id="mobile-menu-btn" class="icon-btn mobile-menu-btn" aria-label="開啟選單" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <div class="hero-badge">
+            <span class="pulse-dot" aria-hidden="true"></span>
+            <span>非官方社群開源工具 · Manifest V3 · 零依賴</span>
+          </div>
+          <h1>claude.ai 用量滿了？<br><span class="highlight">先排隊</span>，重置後自動提醒送出</h1>
+          <p class="hero-lead">
+            剛寫完一大段 prompt 卻遇到 5 小時或每週額度上限？Claude Queue 會把你的訊息與本機附件安全存進佇列，等額度重置時立刻通知你並自動填回原對話，不再遺失靈感。
+          </p>
+
+          <div class="hero-cta">
+            <a href="#install" class="btn btn-primary">免費安裝到 Chrome</a>
+            <a href="https://github.com/ivantw829/claude-queue" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">前往 GitHub 原始碼</a>
+            <a href="https://discord.gg/yEpS7vSJtv" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">Discord 社群</a>
+          </div>
+
+          <div class="hero-meta">
+            <span>✓ 100% 本機儲存</span>
+            <span>✓ 支援圖片與 PDF 附件</span>
+            <span>✓ MIT 開源授權</span>
+            <span>✓ 適用 Chrome 116+</span>
+          </div>
+        </div>
+
+        <!-- Interactive Live Preview Mockup -->
+        <div class="mockup-wrapper" aria-label="Claude Queue 互動介面預覽">
+          <div class="mockup-controls" role="group" aria-label="切換模擬狀態">
+            <button type="button" class="sim-btn active" data-sim-state="full">1. 用量已滿排隊</button>
+            <button type="button" class="sim-btn" data-sim-state="ready">2. 額度已重置</button>
+            <button type="button" class="sim-btn" data-sim-state="sent">3. 確認送出</button>
+          </div>
+
+          <div class="popup-sim">
+            <div class="popup-sim-head">
+              <div class="popup-sim-title">
+                <img src="./assets/favicon.svg" alt="" width="20" height="20" style="border-radius:5px">
+                <span>Claude Queue</span>
+                <span class="version-tag">v0.4.0</span>
+              </div>
+              <span id="sim-status-pill" class="sim-status-pill full">已達上限</span>
+            </div>
+
+            <div class="sim-card">
+              <div class="sim-meter-head">
+                <span>Session（5 小時）</span>
+                <span id="sim-session-pct">100%</span>
+              </div>
+              <div class="sim-bar">
+                <div id="sim-session-bar" class="sim-fill full" style="width:100%"></div>
+              </div>
+              <div id="sim-session-sub" class="sim-sub" style="margin-bottom:10px">預計 18:30 重置（剩餘 24 分鐘）</div>
+
+              <div class="sim-meter-head">
+                <span>每週用量</span>
+                <span>64%</span>
+              </div>
+              <div class="sim-bar">
+                <div class="sim-fill accent" style="width:64%"></div>
+              </div>
+              <div class="sim-sub">週四 14:00 重置 · 來源：用量端點</div>
+            </div>
+
+            <div class="sim-q-label">
+              <span>排隊佇列</span>
+              <span>1 則訊息</span>
+            </div>
+
+            <div id="sim-queue-item" class="sim-q-item">
+              <div class="sim-q-head">
+                <span id="sim-badge" class="sim-badge waiting">等待重置</span>
+                <span class="sim-q-conv">重構 API 架構討論</span>
+                <span class="sim-q-time">18:06</span>
+              </div>
+              <p class="sim-q-text">請幫我把這份規格書整理成 TypeScript 介面，並列出所有錯誤處理與邊界條件…</p>
+              <div class="sim-q-footer">
+                <span class="sim-file">📎 spec-v2.pdf (1.4 MB)</span>
+                <button type="button" id="sim-action-btn" class="btn btn-secondary btn-sm" data-next-state="ready">立即嘗試</button>
+              </div>
+            </div>
+
+            <div class="sim-toast">
+              <span id="sim-toast-text"><strong>已排入佇列：</strong>確認存檔成功，將於 18:30 重置後通知你。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Unofficial Notice Strip -->
+    <div class="disclaimer-strip">
+      <div class="container disclaimer-inner">
+        <span>⚠️ 本工具為<strong>非官方</strong>社群開源專案，與 Anthropic 無隸屬、合作或背書關係。「Claude」為 Anthropic 商標，僅用於說明適用網站。</span>
+        <span>🤖 本專案由作者提出規格，程式碼與測試由 Claude Opus 5.5 協作完成。</span>
+      </div>
+    </div>
+
+    <!-- How It Works -->
+    <section id="how-it-works" class="section">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">How It Works</span>
+          <h2>四個步驟，自動化處理用量上限</h2>
+          <p>用量未滿時完全零干擾；只有在達到上限時才溫柔接手，絕不弄丟你辛苦寫好的 prompt。</p>
+        </div>
+
+        <div class="steps-grid">
+          <article class="step-card">
+            <div class="step-num">01</div>
+            <h3>照常輸入並送出</h3>
+            <p>不需要改變任何使用習慣。用量未滿時擴充功能完全不攔截；按 Enter 或送出按鈕才會觸發檢查（完整相容中文輸入法組字）。</p>
+          </article>
+
+          <article class="step-card">
+            <div class="step-num">02</div>
+            <h3>安全存入本機佇列</h3>
+            <p>確認用量已滿後，將文字、本機附件與原對話網址存入 Chrome 本機儲存空間，<strong>確認存檔成功後才清空輸入框</strong>。</p>
+          </article>
+
+          <article class="step-card">
+            <div class="step-num">03</div>
+            <h3>重置確認與桌面通知</h3>
+            <p>到了預計重置時間（＋30 秒緩衝）自動確認額度是否真的恢復；若尚未重置會每 2 分鐘重試，恢復後立刻發送桌面通知。</p>
+          </article>
+
+          <article class="step-card">
+            <div class="step-num">04</div>
+            <h3>一鍵填回或自動送出</h3>
+            <p>點擊通知開啟原對話、自動填回文字與上傳附件，按下確認列的「送出」即可。也可依需求在設定頁開啟「自動送出」。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Grid -->
+    <section id="features" class="section section-alt">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">Features</span>
+          <h2>為重度 claude.ai 使用者打造的完整細節</h2>
+          <p>從 ProseMirror 富文字編輯器還原到多分頁防重複鎖定，每個邊緣情況都仔細處理。</p>
+        </div>
+
+        <div class="features-grid">
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">📎</div>
+            <h3>文字與本機附件一起排隊</h3>
+            <p>從電腦選檔、拖放或貼上的圖片與 PDF 會存進擴充功能專屬 IndexedDB，重置後自動加回輸入區並等上傳完成才送出，送出後即刪除暫存。</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">⏱️</div>
+            <h3>精準的重置時間偵測</h3>
+            <p>優先讀取 claude.ai 用量端點取得精確百分比與重置時間；若端點失敗自動切換至頁面提示文字解析，並清楚標示是否為「估計」時間。</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">🌙</div>
+            <h3>睡前自動重設（選用）</h3>
+            <p>5 小時工作階段歸零時，自動在專用對話用 <strong>Haiku／中</strong> 送出一則短訊讓下個工作階段立即開始倒數，早上起床即可連續使用兩個工作階段。</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">🛡️</div>
+            <h3>嚴謹的防重複送出機制</h3>
+            <p>Service Worker 以 promise mutex 序列化佇列操作，搭配分頁 Claim 鎖定與對話訊息比對，即使開多個分頁或手動已送出也不會重複發送。</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">✍️</div>
+            <h3>原生級輸入框還原</h3>
+            <p>專為 claude.ai 的 ProseMirror 編輯器設計，支援多行、空行與長文還原；即使未來介面改版導致填入失敗，訊息仍安全保留並提供一鍵複製。</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">🔔</div>
+            <h3>可控的送出模式與更新通知</h3>
+            <p>預設為「桌面通知＋手動確認列」，自動送出需手動開啟且附帶 3 秒取消倒數。從 GitHub 安裝時每日自動檢查一次新版本（可關閉）。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Installation Guide -->
+    <section id="install" class="section">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">Installation</span>
+          <h2>5 分鐘完成安裝，零建置步驟</h2>
+          <p>純 JavaScript 撰寫、不需要 Node.js 或任何打包工具，載入 Chrome 即可直接使用。</p>
+        </div>
+
+        <div class="install-box">
+          <div class="tabs" role="tablist" aria-label="選擇下載方式">
+            <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-tab="zip">方式 A：下載 ZIP（推薦新手）</button>
+            <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="git">方式 B：Git Clone（開發者）</button>
+          </div>
+
+          <div class="tab-panel active" data-tab-panel="zip" role="tabpanel">
+            <ol class="install-steps">
+              <li>
+                <span class="install-step-badge">1</span>
+                <div class="install-step-body">
+                  <strong>下載並解壓縮原始碼</strong>
+                  <p>前往 <a href="https://github.com/ivantw829/claude-queue" target="_blank" rel="noopener noreferrer">GitHub 專案頁面</a>，按綠色的 <strong>Code → Download ZIP</strong>，解壓縮得到 <code>claude-queue-main</code> 資料夾，並移到固定位置（例如「文件」資料夾，安裝後請勿刪除或移動）。</p>
+                </div>
+              </li>
+              <li>
+                <span class="install-step-badge">2</span>
+                <div class="install-step-body">
+                  <strong>開啟 Chrome 擴充功能管理頁</strong>
+                  <p>在 Chrome（版本 116 以上）網址列輸入以下網址並按 Enter，開啟右上角「開發人員模式」開關：</p>
+                  <div class="code-copy">
+                    <span>chrome://extensions</span>
+                    <button type="button" class="copy-btn" data-copy="chrome://extensions">複製</button>
+                  </div>
+                </div>
+              </li>
+              <li>
+                <span class="install-step-badge">3</span>
+                <div class="install-step-body">
+                  <strong>載入未封裝項目</strong>
+                  <p>點擊左上角「載入未封裝項目」，選擇剛剛解壓縮的資料夾（注意：要選<strong>裡面直接包含 <code>manifest.json</code></strong> 的那一層）。</p>
+                </div>
+              </li>
+              <li>
+                <span class="install-step-badge">4</span>
+                <div class="install-step-body">
+                  <strong>釘選圖示並重新整理 claude.ai</strong>
+                  <p>點 Chrome 右上角拼圖圖示 🧩 將 Claude Queue 釘選 📌 到工具列，然後<strong>重新整理已經開啟的 claude.ai 分頁</strong>（<code>⌘R</code> / <code>Ctrl+R</code>），點工具列圖示看到用量百分比即安裝成功！</p>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="tab-panel" data-tab-panel="git" role="tabpanel">
+            <ol class="install-steps">
+              <li>
+                <span class="install-step-badge">1</span>
+                <div class="install-step-body">
+                  <strong>Clone 儲存庫至本機</strong>
+                  <p>在終端機執行以下指令，之後要更新只要 <code>git pull</code> 並在擴充功能頁點重新整理即可：</p>
+                  <div class="code-copy">
+                    <span>git clone https://github.com/ivantw829/claude-queue.git</span>
+                    <button type="button" class="copy-btn" data-copy="git clone https://github.com/ivantw829/claude-queue.git">複製</button>
+                  </div>
+                </div>
+              </li>
+              <li>
+                <span class="install-step-badge">2</span>
+                <div class="install-step-body">
+                  <strong>載入至 Chrome</strong>
+                  <p>前往 <code>chrome://extensions</code> → 開啟「開發人員模式」→ 按「載入未封裝項目」→ 選取 <code>claude-queue</code> 資料夾。</p>
+                </div>
+              </li>
+              <li>
+                <span class="install-step-badge">3</span>
+                <div class="install-step-body">
+                  <strong>釘選圖示並重新整理分頁</strong>
+                  <p>釘選 Claude Queue 至工具列，重新整理已開啟的 claude.ai 分頁。想搶先體驗流程，可在設定頁開啟「模擬用量已滿」進行測試。</p>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="callout">
+            <strong>🔔 提醒：開啟系統桌面通知</strong><br>
+            macOS 請至「系統設定 → 通知 → Google Chrome」開啟允許通知（建議將樣式設為「提示」）；Windows 請至「設定 → 系統 → 通知」確認 Google Chrome 已開啟。完整圖文步驟與試玩教學請參考 <a href="https://github.com/ivantw829/claude-queue/blob/main/GUIDE.md" target="_blank" rel="noopener noreferrer">GUIDE.md 新手教學</a>。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Advanced Features & Status Legend -->
+    <section id="advanced" class="section section-alt">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">Workflow &amp; Advanced</span>
+          <h2>工具列狀態與進階自動化</h2>
+          <p>一目了然的佇列狀態燈號，以及專為高頻使用者設計的睡前自動重設與自動送出。</p>
+        </div>
+
+        <div class="two-col">
+          <article class="info-card">
+            <h3>🎛️ Popup 小視窗與狀態燈號</h3>
+            <p>點擊工具列圖示即可隨時查看 5 小時 Session 與每週用量百分比、倒數時間與佇列清單。每則排隊訊息都支援<strong>直接編輯文字</strong>、<strong>立即嘗試送出</strong>或兩段式確認刪除。</p>
+            <p>工具列圖示會以數字與顏色即時反映佇列狀態：</p>
+            <div class="status-legend">
+              <span class="legend-item"><span class="dot-badge orange"></span>橘色：等待重置中</span>
+              <span class="legend-item"><span class="dot-badge green"></span>綠色：額度已恢復可送出</span>
+              <span class="legend-item"><span class="dot-badge red"></span>紅色：有失敗項目需確認</span>
+            </div>
+            <p style="margin-top:16px;font-size:14px;color:var(--muted)">
+              💡 同一對話排入多則訊息時，會依照順序等待 Claude 回應完成後再依序還原下一則。
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>🌙 睡前自動重設（選用，預設關閉）</h3>
+            <p>claude.ai 的 5 小時工作階段需等你送出第一則訊息才開始倒數。開啟「自動重設」後，工作階段歸零（＋90 秒緩衝）時會在專用對話自動送出一則短訊（預設 <code>Hello World!</code>，並切換為最省額度的 <strong>Haiku／中</strong>），讓新週期馬上開始倒數。</p>
+            <ul class="check-list">
+              <li>Chrome 需保持開啟且 claude.ai 維持登入</li>
+              <li>電腦不可進入睡眠（macOS 可在終端機執行 <code>caffeinate -i</code>）</li>
+              <li>若你已用手機發過訊息，或佇列正自動送出，則不會重複觸發</li>
+              <li>連續失敗 3 次自動暫停並通知，保護帳號安全</li>
+            </ul>
+            <div class="code-copy" style="margin-top:14px">
+              <span>caffeinate -i</span>
+              <button type="button" class="copy-btn" data-copy="caffeinate -i">複製</button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy & Security -->
+    <section id="privacy" class="section">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">Privacy &amp; Architecture</span>
+          <h2>100% 本機運作，隱私透明可檢驗</h2>
+          <p>純 JavaScript 原始碼完全公開，沒有後端伺服器、不追蹤、不上傳任何你的對話內容。</p>
+        </div>
+
+        <div class="privacy-grid">
+          <article class="privacy-card">
+            <div class="privacy-icon" aria-hidden="true">🔒</div>
+            <div>
+              <h3>全部資料留在本機瀏覽器</h3>
+              <p>佇列文字、用量快照與設定存於 <code>chrome.storage.local</code>，附件存於擴充功能專屬 IndexedDB。送出或刪除時同步清除。</p>
+            </div>
+          </article>
+
+          <article class="privacy-card">
+            <div class="privacy-icon" aria-hidden="true">🧩</div>
+            <div>
+              <h3>最小必要權限原則</h3>
+              <p>僅要求 <code>storage</code>、<code>alarms</code>、<code>notifications</code> 三項權限，且只在 <code>https://claude.ai/*</code> 運作，不觸碰任何其他網站。</p>
+            </div>
+          </article>
+
+          <article class="privacy-card">
+            <div class="privacy-icon" aria-hidden="true">🧭</div>
+            <div>
+              <h3>不偽造請求、不繞過限制</h3>
+              <p>送出一律透過頁面上的輸入框與送出按鈕操作，跟你親手點擊完全一樣；不會呼叫或重放 claude.ai 聊天 API。</p>
+            </div>
+          </article>
+
+          <article class="privacy-card">
+            <div class="privacy-icon" aria-hidden="true">📝</div>
+            <div>
+              <h3>去識別化 Debug Log</h3>
+              <p>除錯日誌只記錄事件類型、ID、字數與附件大小，<strong>絕不記錄訊息內容與檔名</strong>。網路請求僅同源 GET 用量與選用的 GitHub 版本號檢查。</p>
+            </div>
+          </article>
+        </div>
+
+        <p style="text-align:center;margin-top:26px;font-size:14.5px;color:var(--muted)">
+          想了解完整細節？請參閱 <a href="https://github.com/ivantw829/claude-queue/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">PRIVACY.md 隱私權政策</a> 與 <a href="https://github.com/ivantw829/claude-queue/blob/main/TESTING.md" target="_blank" rel="noopener noreferrer">TESTING.md 測試清單</a>。
+        </p>
+      </div>
+    </section>
+
+    <!-- Known Limitations & Maintenance -->
+    <section id="limitations" class="section section-alt">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">Transparency</span>
+          <h2>已知限制與維護說明</h2>
+          <p>開源工具講求誠實透明——以下情境請先了解，遇到 claude.ai 改版時也能快速定位修正。</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>項目</th>
+                <th>目前支援狀態與處理方式</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>支援平台</strong></td>
+                <td>僅支援 <code>claude.ai</code> 網頁版（含 Projects），不支援 Claude 桌面 App、手機 App 與 Claude Code。</td>
+              </tr>
+              <tr>
+                <td><strong>附件類型</strong></td>
+                <td>支援從電腦選檔、拖放與貼上的圖片／檔案（單檔 ≤ 30MB、最多 20 個、總佇列 ≤ 300MB）。Google Drive／GitHub 連接附件與長文字轉成的附件無法保存，會照原本方式處理並提示。</td>
+              </tr>
+              <tr>
+                <td><strong>純附件訊息</strong></td>
+                <td>只有附件、沒有任何文字的訊息不會排隊（因重複送出偵測依賴文字比對）。</td>
+              </tr>
+              <tr>
+                <td><strong>自動送出前提</strong></td>
+                <td>需 Chrome 維持開啟、電腦未睡眠且保持登入；若不符合會在下次開啟或喚醒時補檢查。自動送出秉持「寧可不送，也不送錯對話」原則。</td>
+              </tr>
+              <tr>
+                <td><strong>claude.ai 介面改版</strong></td>
+                <td>所有 DOM 選擇器集中在 <code>src/content/selectors.js</code>，用量解析集中在 <code>src/content/usage.js</code>，改版時易於維護。若失效請開 Debug Log 並至 GitHub Issues 或 Discord 回報。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="section">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-kicker">FAQ</span>
+          <h2>常見問題</h2>
+          <p>關於安全性、附件、睡眠狀態與相容性的快速解答。</p>
+        </div>
+
+        <div class="faq-list">
+          <details class="faq-item" open>
+            <summary>這會讓我多用額度或繞過限制嗎？</summary>
+            <div class="faq-body">
+              <p>不會。它只是在你被擋的時候把訊息存起來，等額度恢復後再透過頁面上的送出按鈕送出，跟你自己晚點回來貼上送出完全一樣。它不會呼叫 claude.ai 的聊天 API，也不會重放任何請求。</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary>我的訊息與附件會被傳到哪裡？</summary>
+            <div class="faq-body">
+              <p>哪裡都不會。佇列文字只存在你 Chrome 的 <code>chrome.storage.local</code>，附件存在擴充功能專屬的 IndexedDB，重置後直接透過 claude.ai 頁面本身送出。開發者完全不會收到任何你的資料。</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary>可以傳檔案或圖片嗎？</summary>
+            <div class="faq-body">
+              <p>可以。用量沒滿時完全正常；用量已滿時，你從電腦加入的檔案（選檔、拖放、貼上圖片）會連同文字一起排隊，重置後自動加回輸入區並等上傳完成再送出。Google Drive 等連接的附件則無法保存，會照原本方式處理並提示你。</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary>電腦睡眠或 Chrome 關閉時會怎樣？</summary>
+            <div class="faq-body">
+              <p>Chrome 關閉時無法發通知。下次開啟 Chrome 時，擴充功能會依佇列自動重建排程；如果重置時間已經過了，會立刻檢查並通知你。電腦睡眠中錯過的排程，醒來後也會自動補觸發。</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary>開啟「自動送出」安全嗎？</summary>
+            <div class="faq-body">
+              <p>自動送出預設為關閉，開啟前會跳出確認對話框。啟用後會在重置時自動開啟分頁並填入文字，送出前仍有 3 秒倒數可取消；若原對話已刪除或輸入框已有草稿，會自動保護草稿或停止送出並發通知。</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary>支援 Edge、Brave、Arc 嗎？</summary>
+            <div class="faq-body">
+              <p>這些 Chromium 系瀏覽器理論上都能用「載入未封裝項目」安裝使用，不過目前主要在 Google Chrome 116+ 上開發測試。歡迎在 Discord 分享你的使用結果！</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Community & Open Source CTA -->
+    <section class="section section-alt">
+      <div class="container">
+        <div class="cta-banner">
+          <h2>加入社群，或一起讓 Claude Queue 更好</h2>
+          <p>
+            遇到 claude.ai 改版、想許願新功能、幫忙翻譯其他語系，或單純想分享用法，都歡迎加入 Discord 討論群或到 GitHub 開 Issue / PR！
+          </p>
+          <div class="cta-actions">
+            <a href="https://discord.gg/yEpS7vSJtv" class="btn btn-primary" target="_blank" rel="noopener noreferrer">加入 Discord 討論群</a>
+            <a href="https://github.com/ivantw829/claude-queue" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">⭐ Star on GitHub</a>
+            <a href="https://github.com/ivantw829/claude-queue/issues" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">回報問題 / 提建議</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <a href="#" class="brand" style="margin-bottom:8px">
+            <img src="./assets/favicon.svg" alt="" class="brand-icon" width="26" height="26">
+            <span>Claude Queue</span>
+          </a>
+          <div style="margin-top:6px">claude.ai 用量上限自動排隊與額度重置提醒工具</div>
+        </div>
+
+        <div class="footer-links">
+          <a href="https://github.com/ivantw829/claude-queue" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/ivantw829/claude-queue/blob/main/GUIDE.md" target="_blank" rel="noopener noreferrer">新手教學</a>
+          <a href="https://github.com/ivantw829/claude-queue/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">隱私權政策</a>
+          <a href="https://github.com/ivantw829/claude-queue/blob/main/TESTING.md" target="_blank" rel="noopener noreferrer">測試清單</a>
+          <a href="https://github.com/ivantw829/claude-queue/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT 授權</a>
+          <a href="https://discord.gg/yEpS7vSJtv" target="_blank" rel="noopener noreferrer">Discord</a>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        本專案採 MIT License 開源，依「現狀」提供，不附任何保證。Claude Queue 為非官方社群專案，與 Anthropic 無隸屬、合作或認可關係；「Claude」為 Anthropic 之商標。
+      </div>
+    </div>
+  </footer>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
