@@ -1,5 +1,7 @@
 # Claude Queue
 
+> 🌐 **說明網頁**：<https://ivantw829.github.io/claude-queue/>
+>
 > 🤖 **本專案完全由 Anthropic 的 Claude Opus 5.5 開發。** 作者提供需求規格，所有程式碼、介面文字、文件與測試都由 Claude Opus 5.5 在 Claude Code 中撰寫完成。詳見[關於這個專案的開發方式](#關於這個專案的開發方式)。
 >
 > 💬 **討論群組（Discord）：<https://discord.gg/yEpS7vSJtv>** 有問題、建議或想分享用法都歡迎來聊。
@@ -49,7 +51,7 @@ claude.ai 用量達上限（5 小時 session 上限或每週上限）時，把�
 
 ## 安裝（載入未封裝項目）
 
-> 📖 第一次安裝？看 **[新手教學：從安裝到使用](GUIDE.md)**，有更詳細的步驟、睡前自動重設檢查清單與疑難排解。
+> 📖 第一次安裝？看 **[新手教學：從安裝到使用](https://ivantw829.github.io/claude-queue/)**，有更詳細的步驟、睡前自動重設檢查清單與疑難排解。
 
 1. 開啟 `chrome://extensions`
 2. 打開右上角「開發人員模式」
