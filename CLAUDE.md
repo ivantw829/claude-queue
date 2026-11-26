@@ -75,7 +75,7 @@ The `interceptor.js` blocking decision must be synchronous (`preventDefault`), s
 **Versions and the user guide** (`src/shared/version.js`, `checkForUpdate` / `handleInstalled` in the SW):
 - Unpacked installs never auto-update, so the SW reads `manifest.json` from GitHub `main` once a day (alarm `cq-update-check`), notifies once per new version (`notifiedVersion`), and the popup shows a notice until dismissed (`UPDATE_DISMISS`). State lives in the `update` storage key. Store installs (`chrome.management.getSelf().installType !== 'development'`) skip all of this.
 - `onInstalled` with reason `install` opens the guide (`CQ.version.GUIDE_URL`); reason `update` with a higher version sets `updatedFrom` for the popup's "已更新到" notice. Reloading in developer mode fires `update` with the same version, which is ignored.
-- The guide is published at https://me.asdtw.org/articles/claude-queue-guide.html (built from `GUIDE.md`, maintained on the user's site, not in this repo). Notifications link to its `#s12` anchor (section 12, updating), so that anchor must stay.
+- The guide is published on GitHub Pages at https://ivantw829.github.io/claude-queue/ (`docs/index.html`). Notifications link to its `#install` anchor, so that anchor must stay.
 - Releasing: feature branches are merged into `main` locally (`--no-ff`), then `main` is pushed. Bump `manifest.json` `version` in the same push, or users will not be notified.
 
 ## Fragile parts (claude.ai changes)
